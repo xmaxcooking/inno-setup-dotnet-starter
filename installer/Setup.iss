@@ -1,4 +1,4 @@
-#ifndef AppVersion
+﻿#ifndef AppVersion
   #define AppVersion "0.0.0.0"
 #endif
 #ifndef SourceDir
@@ -35,10 +35,10 @@ OutputDir={#OutputDir}
 OutputBaseFilename=AppClientWindowsSample-Setup
 
 ; More than one [Languages] entry makes Inno Setup show a language-selection dialog as the very
-; first step of Setup, before the wizard's welcome page - no custom code needed. It only
-; translates Setup's own built-in wizard text (Next/Back/Cancel, the license page, etc.); the
-; custom Country/Sample Customers pages below are plain Pascal Script strings and stay in
-; English regardless of the language picked here.
+; first step of Setup, before the wizard's welcome page - no custom code needed. This drives
+; both Setup's own built-in wizard text (Next/Back/Cancel, the license page, etc., via each
+; language's .isl file) and the custom Country/Sample Customers pages' own text, via the
+; [CustomMessages] translations below.
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "german"; MessagesFile: "compiler:Languages\German.isl"
@@ -51,8 +51,62 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
+; Translations for the custom Country/Sample Customers pages in [Code] below, read back there
+; via CustomMessage() - unlike the stock wizard text, Inno Setup has no built-in message for
+; text a script itself defines, so these have to be spelled out per language here.
+[CustomMessages]
+english.CountryPageCaption=Select a Sample Country
+english.CountryPageDescription=The list below comes from App.Installer.Tool.exe at setup runtime, not from this script - it reads App.Infrastructure's FakeDbContext, the same sample data App.Client.Windows shows.
+english.CustomersPageCaption=Sample Customers
+english.CustomersPageDescription=Customers shown here depend on the country you selected on the previous page.
+
+german.CountryPageCaption=Beispielland auswählen
+german.CountryPageDescription=Die folgende Liste stammt zur Laufzeit des Setups von App.Installer.Tool.exe und nicht aus diesem Skript - sie liest FakeDbContext aus App.Infrastructure, dieselben Beispieldaten, die App.Client.Windows anzeigt.
+german.CustomersPageCaption=Beispielkunden
+german.CustomersPageDescription=Die hier angezeigten Kunden hängen von dem auf der vorherigen Seite ausgewählten Land ab.
+
+french.CountryPageCaption=Sélectionner un pays exemple
+french.CountryPageDescription=La liste ci-dessous provient de App.Installer.Tool.exe lors de l'exécution du programme d'installation, et non de ce script - elle lit FakeDbContext de App.Infrastructure, les mêmes données d'exemple que celles affichées par App.Client.Windows.
+french.CustomersPageCaption=Clients exemple
+french.CustomersPageDescription=Les clients affichés ici dépendent du pays sélectionné sur la page précédente.
+
+spanish.CountryPageCaption=Seleccionar un país de ejemplo
+spanish.CountryPageDescription=La lista siguiente proviene de App.Installer.Tool.exe en tiempo de ejecución del instalador, no de este script - lee FakeDbContext de App.Infrastructure, los mismos datos de ejemplo que muestra App.Client.Windows.
+spanish.CustomersPageCaption=Clientes de ejemplo
+spanish.CustomersPageDescription=Los clientes que se muestran aquí dependen del país seleccionado en la página anterior.
+
+italian.CountryPageCaption=Seleziona un paese di esempio
+italian.CountryPageDescription=L'elenco seguente proviene da App.Installer.Tool.exe in fase di esecuzione del setup, non da questo script - legge il FakeDbContext di App.Infrastructure, gli stessi dati di esempio mostrati da App.Client.Windows.
+italian.CustomersPageCaption=Clienti di esempio
+italian.CustomersPageDescription=I clienti mostrati qui dipendono dal paese selezionato nella pagina precedente.
+
+dutch.CountryPageCaption=Selecteer een voorbeeldland
+dutch.CountryPageDescription=De onderstaande lijst komt tijdens het uitvoeren van Setup van App.Installer.Tool.exe, niet van dit script - deze leest de FakeDbContext van App.Infrastructure, dezelfde voorbeeldgegevens die App.Client.Windows toont.
+dutch.CustomersPageCaption=Voorbeeldklanten
+dutch.CustomersPageDescription=De hier weergegeven klanten zijn afhankelijk van het land dat u op de vorige pagina hebt geselecteerd.
+
+portuguese.CountryPageCaption=Selecionar um país de exemplo
+portuguese.CountryPageDescription=A lista abaixo vem do App.Installer.Tool.exe em tempo de execução do Setup, não deste script - lê o FakeDbContext do App.Infrastructure, os mesmos dados de exemplo mostrados pelo App.Client.Windows.
+portuguese.CustomersPageCaption=Clientes de exemplo
+portuguese.CustomersPageDescription=Os clientes mostrados aqui dependem do país selecionado na página anterior.
+
+russian.CountryPageCaption=Выберите тестовую страну
+russian.CountryPageDescription=Приведённый ниже список формируется программой App.Installer.Tool.exe во время работы программы установки, а не этим сценарием - она считывает FakeDbContext из App.Infrastructure, те же тестовые данные, которые отображает App.Client.Windows.
+russian.CustomersPageCaption=Тестовые клиенты
+russian.CustomersPageDescription=Клиенты, показанные здесь, зависят от страны, выбранной на предыдущей странице.
+
+japanese.CountryPageCaption=サンプルの国を選択
+japanese.CountryPageDescription=以下の一覧は、このスクリプトではなく、セットアップの実行時に App.Installer.Tool.exe が生成します。App.Infrastructure の FakeDbContext を読み取るもので、App.Client.Windows が表示するのと同じサンプルデータです。
+japanese.CustomersPageCaption=サンプルの顧客
+japanese.CustomersPageDescription=ここに表示される顧客は、前のページで選択した国によって変わります。
+
+chinesesimplified.CountryPageCaption=选择示例国家
+chinesesimplified.CountryPageDescription=下面的列表是安装程序运行时由 App.Installer.Tool.exe 生成的，而不是来自此脚本 - 它读取 App.Infrastructure 的 FakeDbContext，与 App.Client.Windows 显示的示例数据相同。
+chinesesimplified.CustomersPageCaption=示例客户
+chinesesimplified.CustomersPageDescription=此处显示的客户取决于您在上一页选择的国家。
+
 [Tasks]
-Name: "desktopicon"; Description: "Create a &desktop icon"; GroupDescription: "Additional icons:"
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion; Excludes: "*.pdb"
@@ -126,9 +180,8 @@ begin
     wizard is still collecting input, well before the Install step starts. }
   ExtractTemporaryFiles('*');
 
-  CountryPage := CreateCustomPage(wpSelectTasks, 'Select a Sample Country',
-    'The list below comes from App.Installer.Tool.exe at setup runtime, not from this script - it ' +
-    'reads App.Infrastructure''s FakeDbContext, the same sample data App.Client.Windows shows.');
+  CountryPage := CreateCustomPage(wpSelectTasks, CustomMessage('CountryPageCaption'),
+    CustomMessage('CountryPageDescription'));
   CountryCombo := TNewComboBox.Create(CountryPage);
   CountryCombo.Parent := CountryPage.Surface;
   CountryCombo.Left := 0;
@@ -145,8 +198,8 @@ begin
   if CountryCombo.Items.Count > 0 then
     CountryCombo.ItemIndex := 0;
 
-  CustomersPage := CreateCustomPage(CountryPage.ID, 'Sample Customers',
-    'Customers shown here depend on the country you selected on the previous page.');
+  CustomersPage := CreateCustomPage(CountryPage.ID, CustomMessage('CustomersPageCaption'),
+    CustomMessage('CustomersPageDescription'));
   CustomersListBox := TNewListBox.Create(CustomersPage);
   CustomersListBox.Parent := CustomersPage.Surface;
   CustomersListBox.Left := 0;

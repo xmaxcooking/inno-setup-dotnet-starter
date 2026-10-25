@@ -162,10 +162,17 @@ file-copy step instead of racing it.
 translations that ship inside the `Tools.InnoSetup` NuGet package
 (`tools/Languages/*.isl` next to `ISCC.exe`) - more are available there if you want them. Listing
 more than one language is all it takes for Inno Setup to show a language-selection dialog as the
-very first step of Setup, before the welcome page; no custom code is involved. That dialog, and
-the translation it drives, only covers Setup's own built-in wizard text (Next/Back/Cancel, the
-license page, and so on) - the custom "Select a Sample Country"/"Sample Customers" pages in
-`[Code]` are plain Pascal Script strings and always display in English.
+very first step of Setup, before the welcome page; no custom code is involved. That drives
+Setup's own built-in wizard text (Next/Back/Cancel, the license page, and so on) automatically.
+
+Text a script defines itself has no built-in translation, though: both the "Create a &desktop
+icon" task (`{cm:CreateDesktopIcon}`/`{cm:AdditionalIcons}` - reusing a message every bundled
+`.isl` already defines for exactly this, so it didn't need its own entry below) and the custom
+"Select a Sample Country"/"Sample Customers" pages in `[Code]` (`CustomMessage('CountryPageCaption')`
+etc.) are spelled out per language in the `[CustomMessages]` section above `[Tasks]`. The script
+file itself needs a UTF-8 BOM for Inno Setup to read the Cyrillic/Japanese/Chinese text in there
+correctly - without one, a script with no BOM is read using the system's ANSI code page instead,
+which can't represent those characters.
 
 ## Adapting this template
 
