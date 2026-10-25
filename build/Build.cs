@@ -106,7 +106,14 @@ internal class Build : FalloutBuild
                 .SetRuntime("win-x64")
                 .DisableSelfContained()
                 .SetOutput(publishDirectory)
-                .SetProperty("InformationalVersion", releaseTag)
+                .SetVersion(packageVersion)
+                .SetAssemblyVersion(packageVersion)
+                .SetFileVersion(packageVersion)
+                .SetInformationalVersion(releaseTag)
+                .SetCopyright($"Copyright © {DateTime.UtcNow.Year} Your Company")
+                .SetProperty("Company", "Your Company")
+                .SetProperty("Product", "App.Client.Windows Sample")
+                .SetProperty("AssemblyTitle", "App.Client.Windows Sample")
                 .SetProperty("InnoSetupDotnetStarterIsPrereleaseBuild", _isPrereleaseBuild ? "true" : "false"));
 
             DotNetPublish(s => s
@@ -114,7 +121,15 @@ internal class Build : FalloutBuild
                 .SetConfiguration(_configuration)
                 .SetRuntime("win-x64")
                 .DisableSelfContained()
-                .SetOutput(toolPublishDirectory));
+                .SetOutput(toolPublishDirectory)
+                .SetVersion(packageVersion)
+                .SetAssemblyVersion(packageVersion)
+                .SetFileVersion(packageVersion)
+                .SetInformationalVersion(releaseTag)
+                .SetCopyright($"Copyright © {DateTime.UtcNow.Year} Your Company")
+                .SetProperty("Company", "Your Company")
+                .SetProperty("Product", "App.Client.Windows Sample")
+                .SetProperty("AssemblyTitle", "App.Installer.Tool"));
 
             var nugetPackages = GetVariable("NUGET_PACKAGES")
                 ?? Path.Combine(GetVariable("USERPROFILE") ?? GetVariable("HOME"), ".nuget", "packages");
