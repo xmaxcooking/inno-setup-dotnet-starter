@@ -11,8 +11,6 @@
     <File Path="build/Directory.Build.targets" />
   </Folder>
   <Folder Name="/build/">
-    <File Path="build.ps1" />
-    <File Path="build.sh" />
     <Project Path="build/App.Build.csproj">
       <Build Project="false" />
     </Project>

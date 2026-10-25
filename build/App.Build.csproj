@@ -25,4 +25,9 @@
     <ProjectReference Include="..\src\App.Updates\App.Updates.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\build.ps1" Link="build.ps1" />
+    <None Include="..\build.sh" Link="build.sh" />
+  </ItemGroup>
+
 </Project>
