@@ -24,9 +24,11 @@ tests/
 installer/
   Setup.iss        the whole installer - an Inno Setup script, not an MSBuild project; compiled
                     by ISCC.exe (see "Build the installer only" below)
-  App.Installer.Tool/  .NET 10 console app, bundled into the installer and run at install time -
-                    demonstrates that install-time code can reach the app's own assemblies, with
-                    none of MSI's net48/mscoree constraint (see "Adapting this template" below)
+  App.Installer.Tool/  .NET 10 console app, bundled into the installer and run via
+                    ExecAndCaptureOutput() to populate two custom wizard pages (a country dropdown,
+                    then a dependent customer list) straight from App.Infrastructure's real sample
+                    data - not from data hardcoded in the script. None of MSI's net48/mscoree
+                    constraint on install-time code either (see "Adapting this template" below)
 build/
   App.Build.csproj Fallout (NUKE successor) build pipeline - see "Full pipeline" below
 ```
@@ -124,7 +126,8 @@ whole install UI) - disproportionate scope for a template.
 Inno Setup has `Create a desktop icon` and `Launch application` as literal, built-in wizard
 checkboxes - see `[Tasks]`/`[Icons]`/`[Run]` in `installer/Setup.iss`. It also has no equivalent
 of MSI's net48/mscoree constraint on install-time code (`installer/App.Installer.Tool` is called
-directly via `Exec()`, no Burn-ExePackage-style workaround needed), and its compiler
+via `ExecAndCaptureOutput()` to drive two custom wizard pages, no Burn-ExePackage-style workaround
+needed), and its compiler
 (`ISCC.exe`, via the `Tools.InnoSetup` NuGet package - maintained by Jordan Russell, Inno Setup's
 own author) has no license fee, unlike WiX's pre-built binaries from v6 onward.
 

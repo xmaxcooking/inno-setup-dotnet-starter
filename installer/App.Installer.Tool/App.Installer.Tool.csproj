@@ -1,9 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- WinExe (not Exe) so the console-subsystem window never gets allocated at all - Setup.iss's
-         Exec(... SW_HIDE ...) can still flash a console window briefly before the hide takes effect. -->
-    <OutputType>WinExe</OutputType>
+    <!-- Plain console app: Setup.iss only invokes this via ExecAndCaptureOutput now, which Inno
+         Setup's own docs say always hides console programs regardless of ShowCmd - no flash risk,
+         so there's no reason to give up normal console behavior for interactive/manual runs. -->
+    <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <Platforms>x64</Platforms>
     <Platform>x64</Platform>
@@ -13,6 +14,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\App.Infrastructure\App.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
   </ItemGroup>
 
 </Project>

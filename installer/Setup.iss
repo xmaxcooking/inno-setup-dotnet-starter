@@ -51,6 +51,10 @@ Filename: "{app}\App.Client.Windows.exe"; Description: "{cm:LaunchProgram,App.Cl
 [Code]
 var
   DownloadPage: TDownloadWizardPage;
+  CountryPage: TWizardPage;
+  CountryCombo: TNewComboBox;
+  CustomersPage: TWizardPage;
+  CustomersListBox: TNewListBox;
 
 function IsDotNetDesktopRuntimeInstalled(): Boolean;
 begin
@@ -58,17 +62,100 @@ begin
   Result := RegKeyExists(HKLM64, 'SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App');
 end;
 
-procedure InitializeWizard();
+{ Runs the bundled App.Installer.Tool.exe and returns its stdout as one array element per line. The
+  country dropdown and the dependent customer list below are both populated this way, from the real
+  App.Domain/App.Infrastructure classes the app itself uses - not from data hardcoded in this script. }
+function RunInstallerTool(const Params: String; var Lines: TArrayOfString): Boolean;
+var
+  ResultCode: Integer;
+  Output: TExecOutput;
 begin
-  DownloadPage := CreateDownloadPage(SetupMessage(msgWizardPreparing), SetupMessage(msgPreparingDesc), nil);
+  Result := ExecAndCaptureOutput(ExpandConstant('{tmp}\App.Installer.Tool.exe'), Params, '',
+    SW_SHOWNORMAL, ewWaitUntilTerminated, ResultCode, Output) and (ResultCode = 0);
+  if Result then
+    Lines := Output.StdOut
+  else
+    SetArrayLength(Lines, 0);
 end;
 
+procedure PopulateCustomersForSelectedCountry();
+var
+  Lines: TArrayOfString;
+  I: Integer;
+begin
+  CustomersListBox.Items.Clear;
+  if CountryCombo.ItemIndex < 0 then
+    exit;
+
+  if RunInstallerTool('list-customers "' + CountryCombo.Items[CountryCombo.ItemIndex] + '"', Lines) then
+    for I := 0 to GetArrayLength(Lines) - 1 do
+      if Lines[I] <> '' then
+        CustomersListBox.Items.Add(Lines[I]);
+end;
+
+procedure CountryComboChange(Sender: TObject);
+begin
+  PopulateCustomersForSelectedCountry();
+end;
+
+procedure InitializeWizard();
+var
+  Countries: TArrayOfString;
+  I: Integer;
+begin
+  DownloadPage := CreateDownloadPage(SetupMessage(msgWizardPreparing), SetupMessage(msgPreparingDesc), nil);
+
+  { Extracted here rather than at ssPostInstall - the two pages below need to run the tool while the
+    wizard is still collecting input, well before the Install step starts. }
+  ExtractTemporaryFiles('*');
+
+  CountryPage := CreateCustomPage(wpSelectTasks, 'Select a Sample Country',
+    'The list below comes from App.Installer.Tool.exe at setup runtime, not from this script - it ' +
+    'reads App.Infrastructure''s FakeDbContext, the same sample data App.Client.Windows shows.');
+  CountryCombo := TNewComboBox.Create(CountryPage);
+  CountryCombo.Parent := CountryPage.Surface;
+  CountryCombo.Left := 0;
+  CountryCombo.Top := 0;
+  CountryCombo.Width := CountryPage.SurfaceWidth;
+  CountryCombo.Style := csDropDownList;
+  CountryCombo.OnChange := @CountryComboChange;
+
+  if RunInstallerTool('list-countries', Countries) then
+    for I := 0 to GetArrayLength(Countries) - 1 do
+      if Countries[I] <> '' then
+        CountryCombo.Items.Add(Countries[I]);
+
+  if CountryCombo.Items.Count > 0 then
+    CountryCombo.ItemIndex := 0;
+
+  CustomersPage := CreateCustomPage(CountryPage.ID, 'Sample Customers',
+    'Customers shown here depend on the country you selected on the previous page.');
+  CustomersListBox := TNewListBox.Create(CustomersPage);
+  CustomersListBox.Parent := CustomersPage.Surface;
+  CustomersListBox.Left := 0;
+  CustomersListBox.Top := 0;
+  CustomersListBox.Width := CustomersPage.SurfaceWidth;
+  CustomersListBox.Height := CustomersPage.SurfaceHeight;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = CustomersPage.ID then
+    PopulateCustomersForSelectedCountry();
+end;
+
+{ Both runtimes are downloaded AND installed here, right before CountryPage - not at wpReady/ssInstall
+  like a plain prerequisite normally would be - because App.Installer.Tool (framework-dependent, needs
+  Microsoft.NETCore.App) has to actually run via ExecAndCaptureOutput to populate CountryPage, and that
+  happens while the wizard is still collecting input, long before ssInstall. Installing the .NET Desktop
+  Runtime also brings in the base Microsoft.NETCore.App runtime the tool needs, as a bundled dependency. }
 function NextButtonClick(CurPageID: Integer): Boolean;
 var
   Error: String;
+  ResultCode: Integer;
 begin
   Result := True;
-  if CurPageID = wpReady then
+  if CurPageID = wpSelectTasks then
   begin
     DownloadPage.Clear;
 
@@ -107,42 +194,20 @@ begin
     finally
       DownloadPage.Hide;
     end;
-  end;
-end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
-var
-  ResultCode: Integer;
-  SampleParam: String;
-begin
-  if CurStep = ssInstall then
-  begin
-    if not IsDotNetDesktopRuntimeInstalled() then
+    if Result then
     begin
-      if not Exec(ExpandConstant('{tmp}\windowsdesktop-runtime-win-x64.exe'), '/install /quiet /norestart', '',
+      if not IsDotNetDesktopRuntimeInstalled() then
+      begin
+        if not Exec(ExpandConstant('{tmp}\windowsdesktop-runtime-win-x64.exe'), '/install /quiet /norestart', '',
+            SW_SHOW, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+          Log('.NET Desktop Runtime install failed (exit code ' + IntToStr(ResultCode) + ').');
+      end;
+
+      { No DetectCondition for this one - always run it, same as the WiX repo's WindowsAppRuntime.wxs. }
+      if not Exec(ExpandConstant('{tmp}\windowsappruntimeinstall-x64.exe'), '--quiet', '',
           SW_SHOW, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
-        Log('.NET Desktop Runtime install failed (exit code ' + IntToStr(ResultCode) + ').');
+        Log('Windows App Runtime install failed (exit code ' + IntToStr(ResultCode) + ').');
     end;
-
-    { No DetectCondition for this one - always run it, same as the WiX repo's WindowsAppRuntime.wxs. }
-    if not Exec(ExpandConstant('{tmp}\windowsappruntimeinstall-x64.exe'), '--quiet', '',
-        SW_SHOW, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
-      Log('Windows App Runtime install failed (exit code ' + IntToStr(ResultCode) + ').');
-  end;
-
-  if CurStep = ssPostInstall then
-  begin
-    { ExtractTemporaryFiles (plural, confirmed in jrsoftware/issrc source) extracts every dontcopy-flagged
-      temp file matching the pattern in one call - the App.Installer.Tool publish output has an unknown/
-      variable number of dependency files, so this avoids hardcoding each one. }
-    ExtractTemporaryFiles('*');
-    SampleParam := ExpandConstant('{param:SAMPLEPARAM|}');
-    Exec(ExpandConstant('{tmp}\App.Installer.Tool.exe'), '"' + SampleParam + '"', '',
-      SW_HIDE, ewWaitUntilTerminated, ResultCode);
-
-    { ValidateSampleProperty/WriteSampleMarkerFile equivalent from the WiX repo's MSI custom actions -
-      demonstrates install-time Pascal Script logic, with none of MSI's net48/mscoree constraint. }
-    SaveStringToFile(ExpandConstant('{app}\installed-by-setup.txt'),
-      'Installed ' + GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0) + #13#10, False);
   end;
 end;

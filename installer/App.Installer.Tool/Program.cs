@@ -1,10 +1,44 @@
 using App.Infrastructure;
+using System.CommandLine;
 
-var sampleBundleVariable = args.Length > 0 ? args[0] : string.Empty;
+var countryArgument = new Argument<string>("country")
+{
+    Description = "The country to list sample customers for"
+};
 
-var dbContext = new FakeDbContext();
-var customerCount = dbContext.Customers.Count();
-Console.WriteLine($"App.Installer.Tool: SampleBundleVariable='{sampleBundleVariable}', " +
-    $"App.Domain reports {customerCount} sample customers.");
+var listCountriesCommand = new Command("list-countries", "List the distinct countries in the sample data");
 
-return 0;
+var listCustomersCommand = new Command("list-customers", "List sample customers for a country")
+{
+    Arguments = { countryArgument }
+};
+
+var rootCommand = new RootCommand("Install-time data provider for Setup.iss's custom wizard pages")
+{
+    Subcommands = { listCountriesCommand, listCustomersCommand }
+};
+
+listCountriesCommand.SetAction(_ =>
+{
+    var dbContext = new FakeDbContext();
+    foreach (var country in dbContext.Customers.Select(c => c.Country).Distinct().OrderBy(c => c))
+    {
+        Console.WriteLine(country);
+    }
+
+    return 0;
+});
+
+listCustomersCommand.SetAction(parseResult =>
+{
+    var country = parseResult.GetValue(countryArgument);
+    var dbContext = new FakeDbContext();
+    foreach (var customer in dbContext.Customers.Where(c => c.Country == country).OrderBy(c => c.Name))
+    {
+        Console.WriteLine(customer.Name);
+    }
+
+    return 0;
+});
+
+return rootCommand.Parse(args).Invoke();
