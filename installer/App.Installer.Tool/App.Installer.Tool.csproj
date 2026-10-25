@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <!-- WinExe (not Exe) so the console-subsystem window never gets allocated at all - Setup.iss's
+         Exec(... SW_HIDE ...) can still flash a console window briefly before the hide takes effect. -->
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <Platforms>x64</Platforms>
     <Platform>x64</Platform>

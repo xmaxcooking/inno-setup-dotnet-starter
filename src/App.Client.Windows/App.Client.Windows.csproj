@@ -36,4 +36,12 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" />
   </ItemGroup>
 
+  <!-- dotnet publish never copies the generated <AssemblyName>.pri into the publish output for an
+       unpackaged (WindowsPackageType=None) app, but WinUI's native resource loader hardcodes the
+       filename "resources.pri" next to the exe - without it, the first XAML resource lookup crashes
+       hard natively inside Microsoft.UI.Xaml.dll at startup. -->
+  <Target Name="CopyPriFileToPublishDir" AfterTargets="Publish">
+    <Copy SourceFiles="$(TargetDir)$(AssemblyName).pri" DestinationFiles="$(PublishDir)resources.pri" Condition="Exists('$(TargetDir)$(AssemblyName).pri')" />
+  </Target>
+
 </Project>
