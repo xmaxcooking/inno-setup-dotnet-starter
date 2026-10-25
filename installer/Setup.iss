@@ -16,6 +16,9 @@ AppId={{B8F3E2A1-4C5D-4E6F-9A1B-2C3D4E5F6A7B}
 AppName=App.Client.Windows Sample
 AppVersion={#AppVersion}
 AppPublisher=Your Company
+AppMutex=InnoSetupDotnetStarterAppMutex
+CloseApplications=yes
+RestartApplications=yes
 DefaultDirName={autopf}\App.Client.Windows Sample
 DefaultGroupName=App.Client.Windows Sample
 UninstallDisplayIcon={app}\App.Client.Windows.exe
@@ -31,8 +34,22 @@ PrivilegesRequired=admin
 OutputDir={#OutputDir}
 OutputBaseFilename=AppClientWindowsSample-Setup
 
+; More than one [Languages] entry makes Inno Setup show a language-selection dialog as the very
+; first step of Setup, before the wizard's welcome page - no custom code needed. It only
+; translates Setup's own built-in wizard text (Next/Back/Cancel, the license page, etc.); the
+; custom Country/Sample Customers pages below are plain Pascal Script strings and stay in
+; English regardless of the language picked here.
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "german"; MessagesFile: "compiler:Languages\German.isl"
+Name: "french"; MessagesFile: "compiler:Languages\French.isl"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
+Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
+Name: "dutch"; MessagesFile: "compiler:Languages\Dutch.isl"
+Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"
+Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
+Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
+Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop icon"; GroupDescription: "Additional icons:"

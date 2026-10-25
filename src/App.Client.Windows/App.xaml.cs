@@ -11,11 +11,20 @@ namespace App.Client.Windows;
 
 public partial class App : Application
 {
+    // Must match Setup.iss's AppMutex exactly - held for the app's whole lifetime so a
+    // re-run of the installer (manual repair, or the auto-update below) can detect this
+    // instance is still running and ask the user to close it before overwriting its files,
+    // instead of silently failing to replace a locked exe/dll.
+    private const string AppMutexName = "InnoSetupDotnetStarterAppMutex";
+
+    private readonly Mutex _appMutex;
+
     private MainWindow? _mainWindow;
 
     public App()
     {
         InitializeComponent();
+        _appMutex = new Mutex(initiallyOwned: true, name: AppMutexName);
     }
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
@@ -25,7 +34,12 @@ public partial class App : Application
         var provider = services.BuildServiceProvider();
 
         _mainWindow = provider.GetRequiredService<MainWindow>();
-        _mainWindow.Closed += (_, _) => provider.Dispose();
+        _mainWindow.Closed += (_, _) =>
+        {
+            provider.Dispose();
+            _appMutex.ReleaseMutex();
+            _appMutex.Dispose();
+        };
         _mainWindow.Activate();
 
         await checkForUpdatesAsync(provider);
@@ -49,7 +63,11 @@ public partial class App : Application
         try
         {
             await updateCheck.DownloadAndLaunchAsync(update);
-            Exit();
+
+            // A hard, immediate process exit (not the async Application.Exit()) so the mutex
+            // above and any locked files are released before the installer we just launched
+            // gets to the point of overwriting them.
+            Environment.Exit(0);
         }
         catch (Exception ex)
         {

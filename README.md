@@ -132,9 +132,40 @@ needed), and its compiler
 own author) has no license fee, unlike WiX's pre-built binaries from v6 onward.
 
 What's genuinely lost: no MSI/Windows Installer format (matters if you need enterprise deployment
-via Intune/SCCM/Group Policy), and no equivalent of MSI's deferred/rollback-journaled custom
+via Intune/SCCM/Group Policy), no equivalent of MSI's deferred/rollback-journaled custom
 action model - Inno has its own uninstall-log-based rollback for files/registry, but nothing
-generically transactional.
+generically transactional - and no MSI-style Modify/Repair/Remove maintenance page when you
+re-run Setup against an existing install.
+
+### Repairing or reinstalling
+
+Inno Setup has no separate "repair" mode. Re-running `AppClientWindowsSample-Setup.exe` (whether
+the user downloads it again or it's the update installer this app launches itself - see
+`src/App.Updates/UpdateCheck.cs`) just runs the same install over the existing one: every file in
+`[Files]` has `Flags: ignoreversion`, so it's always rewritten from the source payload regardless
+of what version is already on disk, which is the repair.
+
+The only thing that can get in the way of that is the app still running: Setup can't overwrite a
+locked `App.Client.Windows.exe`. `AppMutex=InnoSetupDotnetStarterAppMutex` in `[Setup]`, matched by
+a `Mutex` the app holds for its whole lifetime in `App.Client.Windows/App.xaml.cs`, makes Setup
+detect that and prompt the user to close it rather than silently leaving the old files in place;
+`CloseApplications=yes`/`RestartApplications=yes` additionally let Setup ask the Windows Restart
+Manager to close and relaunch it automatically. The app's own auto-update path
+(`UpdateCheck.DownloadAndLaunchAsync` + `App.xaml.cs`) also calls `Environment.Exit(0)` right
+after launching the downloaded installer, a hard process exit rather than WinUI's graceful
+`Application.Exit()`, so its own mutex and file locks are released before Setup gets to the
+file-copy step instead of racing it.
+
+### Multiple languages
+
+`installer/Setup.iss`'s `[Languages]` section lists ten languages using the official `.isl`
+translations that ship inside the `Tools.InnoSetup` NuGet package
+(`tools/Languages/*.isl` next to `ISCC.exe`) - more are available there if you want them. Listing
+more than one language is all it takes for Inno Setup to show a language-selection dialog as the
+very first step of Setup, before the welcome page; no custom code is involved. That dialog, and
+the translation it drives, only covers Setup's own built-in wizard text (Next/Back/Cancel, the
+license page, and so on) - the custom "Select a Sample Country"/"Sample Customers" pages in
+`[Code]` are plain Pascal Script strings and always display in English.
 
 ## Adapting this template
 
