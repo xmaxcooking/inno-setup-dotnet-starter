@@ -76,7 +76,7 @@ public class UpdateCheckTests
     {
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
-        fileSystem.SeedExistingFile(seedState("build-99", now.AddMinutes(-10)));
+        fileSystem.SeedExistingFile(seedState("v1.0.99", now.AddMinutes(-10)));
         var feed = new FakeUpdateFeed(null);
         var check = createUpdateCheck(feed, fileSystem, now);
 
@@ -105,7 +105,7 @@ public class UpdateCheckTests
     {
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
-        var update = new UpdateInfo("build-99", "https://example.com/installer.exe");
+        var update = new UpdateInfo("v1.0.99", "https://example.com/installer.exe");
         var feed = new FakeUpdateFeed(update);
         var processLauncher = new FakeProcessLauncher();
         var check = createUpdateCheck(feed, fileSystem, now, processLauncher: processLauncher);
@@ -123,7 +123,7 @@ public class UpdateCheckTests
     {
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
-        var update = new UpdateInfo("build-99", "https://example.com/installer.exe");
+        var update = new UpdateInfo("v1.0.99", "https://example.com/installer.exe");
         var feed = new FakeUpdateFeed(update);
         var handler = new StubHttpMessageHandler("installer-bytes");
         var httpClient = new HttpClient(handler);
@@ -137,7 +137,7 @@ public class UpdateCheckTests
         Assert.AreEqual(1, fileSystem.CreatedFilePaths.Count);
         Assert.AreEqual(1, processLauncher.StartedPaths.Count);
         Assert.AreEqual(fileSystem.CreatedFilePaths[0], processLauncher.StartedPaths[0]);
-        Assert.IsTrue(processLauncher.StartedPaths[0].Contains("build-99"));
+        Assert.IsTrue(processLauncher.StartedPaths[0].Contains("v1.0.99"));
     }
 
     // Mirrors UpdateCheck.CheckAsync's own Assembly.GetExecutingAssembly() call - that resolves

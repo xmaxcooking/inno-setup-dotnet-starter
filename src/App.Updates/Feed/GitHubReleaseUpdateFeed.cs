@@ -65,8 +65,8 @@ public sealed class GitHubReleaseUpdateFeed : IUpdateFeed
 
     // The releases list endpoint's order isn't reliably newest-first in practice (confirmed
     // against the real API: it can return older releases ahead of newer ones), so position 0
-    // can't be trusted. Pick the entry with the highest build number among the fetched page
-    // instead - BuildTag.TryParse already defines "newer" the same way IsNewer below does.
+    // can't be trusted. Pick the entry with the highest version among the fetched page instead -
+    // SemanticVersion.Parse already defines "newer" the same way IsNewer below does.
     private static JsonElement? selectRelease(JsonElement root, UpdateChannel channel)
     {
         if (channel == UpdateChannel.Stable)
@@ -75,19 +75,20 @@ public sealed class GitHubReleaseUpdateFeed : IUpdateFeed
         }
 
         JsonElement? latest = null;
-        var latestRunNumber = -1L;
+        Version? latestVersion = null;
         foreach (var release in root.EnumerateArray())
         {
             var tagName = release.GetProperty("tag_name").GetString();
-            if (tagName is null || !BuildTag.TryParse(tagName, out var runNumber))
+            var version = tagName is null ? null : SemanticVersion.Parse(tagName);
+            if (version is null)
             {
                 continue;
             }
 
-            if (latest is null || runNumber > latestRunNumber)
+            if (latestVersion is null || version > latestVersion)
             {
                 latest = release;
-                latestRunNumber = runNumber;
+                latestVersion = version;
             }
         }
 
@@ -97,7 +98,7 @@ public sealed class GitHubReleaseUpdateFeed : IUpdateFeed
     private static UpdateInfo? toUpdateInfo(JsonElement release, string currentVersion)
     {
         var version = release.GetProperty("tag_name").GetString();
-        if (version is null || version.Length == 0 || !BuildTag.IsNewer(currentVersion, version))
+        if (version is null || version.Length == 0 || !SemanticVersion.IsNewer(currentVersion, version))
         {
             return null;
         }

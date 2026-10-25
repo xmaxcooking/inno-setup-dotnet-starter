@@ -40,7 +40,7 @@ public sealed class UpdateCheck
         try
         {
             var currentVersion = Assembly.GetExecutingAssembly()
-                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "build-0";
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "v0.0.0";
 
             if (!isDue(currentVersion))
             {

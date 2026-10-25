@@ -48,7 +48,7 @@ internal class Build : FalloutBuild
     private AbsolutePath toolPublishDirectory => RootDirectory / "artifacts" / "publish" / "App.Installer.Tool";
     private AbsolutePath setupScript => RootDirectory / "installer" / "Setup.iss";
 
-    private string releaseTag => BuildTag.Format(GitHubActions.Instance?.RunNumber ?? 0);
+    private string releaseTag => SemanticVersion.Format(GitHubActions.Instance?.RunNumber ?? 0);
 
     private string packageVersion => GitHubActions.Instance is { } gitHubActions
         ? $"1.0.{gitHubActions.RunNumber}.0"

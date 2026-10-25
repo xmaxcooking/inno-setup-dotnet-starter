@@ -101,16 +101,18 @@ configuration dropdown instead of the command line.
 `.github/workflows/release.yml` is generated from the `[GitHubActions]` attribute on `Build` in
 `build/Build.cs` - don't hand-edit the `.yml`; change the attribute and run the build once to
 regenerate it. On every push to `master` it runs `publishRelease` (which depends on
-`packInstaller`) on `windows-latest`, creating a GitHub Release tagged `build-<run number>` -
-always unique, no collisions across re-runs - marked as a prerelease, with
-`AppClientWindowsSample-Setup.exe` attached.
+`packInstaller`) on `windows-latest`, creating a GitHub Release tagged `v1.0.<run number>`
+(`src/App.Updates/Feed/SemanticVersion.cs`) - always unique, no collisions across re-runs -
+marked as a prerelease, with `AppClientWindowsSample-Setup.exe` attached.
 Auth is `GITHUB_TOKEN`, provided automatically by Actions; no secrets to configure. `global.json`
 pins the SDK version `actions/setup-dotnet` installs.
 
 Every release is a GitHub prerelease by design; there's no automated "promote to stable" step.
 To promote a build so the Stable update channel (see `src/App.Updates/`) picks it up, open that
 release on GitHub and uncheck "Set as a pre-release" - the app's Stable channel reads
-`GET /releases/latest`, which only ever returns the most recent *non-prerelease* release.
+`GET /releases/latest`, which only ever returns the most recent *non-prerelease* release. The
+Beta channel instead fetches a page of recent releases and picks the highest version among them -
+the list endpoint's order isn't reliably newest-first in practice, so position 0 can't be trusted.
 
 ## Why Inno Setup instead of WiX?
 
