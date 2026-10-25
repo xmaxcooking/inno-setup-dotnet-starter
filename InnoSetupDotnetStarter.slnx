@@ -6,8 +6,6 @@
     <File Path=".editorconfig" />
     <File Path=".gitattributes" />
     <File Path=".gitignore" />
-    <File Path=".config/dotnet-tools.json" />
-    <File Path=".fallout/parameters.json" />
     <File Path="build.ps1" />
     <File Path="build.sh" />
     <File Path="README.md" />
