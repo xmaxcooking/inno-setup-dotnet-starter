@@ -5,6 +5,7 @@ using App.Updates.Feed;
 using App.Updates.FileSystem;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
+using System.Text.Json;
 
 namespace App.Updates;
 
@@ -38,7 +39,10 @@ public sealed class UpdateCheck
     {
         try
         {
-            if (!isDue())
+            var currentVersion = Assembly.GetExecutingAssembly()
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "build-0";
+
+            if (!isDue(currentVersion))
             {
                 _logger.LogDebug("Update check skipped; not due yet.");
                 return null;
@@ -46,12 +50,9 @@ public sealed class UpdateCheck
 
             using var cts = new CancellationTokenSource(_overallTimeout);
 
-            var currentVersion = Assembly.GetExecutingAssembly()
-                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "build-0";
-
             var update = await _feed.TryGetLatestIfNewerAsync(currentVersion, _clientIdentity.GetOrCreate(), cts.Token);
 
-            recordChecked();
+            recordChecked(currentVersion);
 
             return update;
         }
@@ -82,7 +83,11 @@ public sealed class UpdateCheck
         _processLauncher.Start(installerPath);
     }
 
-    private bool isDue()
+    // Due regardless of the cooldown below whenever the running version differs from the one
+    // recorded by the last check - otherwise a build published and installed within the same
+    // hour as an earlier build's "no update" check would silently inherit that cooldown and
+    // skip checking on its very first launch, right when a check is most wanted.
+    private bool isDue(string currentVersion)
     {
         try
         {
@@ -91,8 +96,10 @@ public sealed class UpdateCheck
                 return true;
             }
 
-            return !DateTimeOffset.TryParse(_fileSystem.ReadAllText(SpecialFiles.LastUpdateCheck), out var lastChecked)
-                || _systemDateTime.UtcNow - lastChecked >= _checkInterval;
+            var state = JsonSerializer.Deserialize<CheckState>(_fileSystem.ReadAllText(SpecialFiles.LastUpdateCheck));
+            return state is null
+                || state.Version != currentVersion
+                || _systemDateTime.UtcNow - state.CheckedAt >= _checkInterval;
         }
         catch (Exception ex)
         {
@@ -101,16 +108,29 @@ public sealed class UpdateCheck
         }
     }
 
-    private void recordChecked()
+    private void recordChecked(string currentVersion)
     {
         try
         {
             _fileSystem.CreateDirectory(ApplicationDataDirectory.Path);
-            _fileSystem.WriteAllText(SpecialFiles.LastUpdateCheck, _systemDateTime.UtcNow.ToString("O"));
+            var state = new CheckState(currentVersion, _systemDateTime.UtcNow);
+            _fileSystem.WriteAllText(SpecialFiles.LastUpdateCheck, JsonSerializer.Serialize(state));
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Could not persist update-check timestamp.");
+        }
+    }
+
+    private sealed class CheckState
+    {
+        public string Version { get; }
+        public DateTimeOffset CheckedAt { get; }
+
+        public CheckState(string version, DateTimeOffset checkedAt)
+        {
+            Version = version;
+            CheckedAt = checkedAt;
         }
     }
 }

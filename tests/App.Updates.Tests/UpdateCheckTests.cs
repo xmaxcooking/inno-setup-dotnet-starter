@@ -1,5 +1,7 @@
 using App.Updates.Feed;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Reflection;
+using System.Text.Json;
 
 namespace App.Updates.Tests;
 
@@ -11,7 +13,7 @@ public class UpdateCheckTests
     {
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
-        fileSystem.SeedExistingFile(now.AddMinutes(-10).ToString("O"));
+        fileSystem.SeedExistingFile(seedState(runningVersion(), now.AddMinutes(-10)));
         var feed = new FakeUpdateFeed(null);
         var check = createUpdateCheck(feed, fileSystem, now);
 
@@ -27,7 +29,7 @@ public class UpdateCheckTests
     {
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
-        fileSystem.SeedExistingFile(now.AddHours(-2).ToString("O"));
+        fileSystem.SeedExistingFile(seedState(runningVersion(), now.AddHours(-2)));
         var feed = new FakeUpdateFeed(null);
         var check = createUpdateCheck(feed, fileSystem, now);
 
@@ -36,7 +38,7 @@ public class UpdateCheckTests
         Assert.IsNull(result);
         Assert.IsTrue(feed.WasCalled);
         Assert.AreEqual("the-client-id", feed.ReceivedClientId);
-        Assert.AreEqual(now.ToString("O"), fileSystem.WrittenContent);
+        assertWrittenState(fileSystem, runningVersion(), now);
         Assert.IsTrue(fileSystem.CreatedDirectories.Count > 0);
     }
 
@@ -55,11 +57,26 @@ public class UpdateCheckTests
     }
 
     [TestMethod]
-    public async Task CheckAsync_Checks_WhenTheStoredTimestampIsUnparsable()
+    public async Task CheckAsync_Checks_WhenTheStoredStateIsUnparsable()
     {
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
         fileSystem.SeedExistingFile("not-a-timestamp");
+        var feed = new FakeUpdateFeed(null);
+        var check = createUpdateCheck(feed, fileSystem, now);
+
+        var result = await check.CheckAsync();
+
+        Assert.IsNull(result);
+        Assert.IsTrue(feed.WasCalled);
+    }
+
+    [TestMethod]
+    public async Task CheckAsync_Checks_WhenTheRecordedVersionDiffersFromTheRunningOne()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var fileSystem = new FakeFileSystem();
+        fileSystem.SeedExistingFile(seedState("build-99", now.AddMinutes(-10)));
         var feed = new FakeUpdateFeed(null);
         var check = createUpdateCheck(feed, fileSystem, now);
 
@@ -98,7 +115,7 @@ public class UpdateCheckTests
         Assert.AreSame(update, result);
         Assert.AreEqual(0, fileSystem.CreatedFilePaths.Count);
         Assert.AreEqual(0, processLauncher.StartedPaths.Count);
-        Assert.AreEqual(now.ToString("O"), fileSystem.WrittenContent);
+        assertWrittenState(fileSystem, runningVersion(), now);
     }
 
     [TestMethod]
@@ -121,6 +138,26 @@ public class UpdateCheckTests
         Assert.AreEqual(1, processLauncher.StartedPaths.Count);
         Assert.AreEqual(fileSystem.CreatedFilePaths[0], processLauncher.StartedPaths[0]);
         Assert.IsTrue(processLauncher.StartedPaths[0].Contains("build-99"));
+    }
+
+    // Mirrors UpdateCheck.CheckAsync's own Assembly.GetExecutingAssembly() call - that resolves
+    // to App.Updates.dll regardless of which assembly calls into it, so reading the attribute
+    // from the same assembly here gives the exact value UpdateCheck itself will compare against,
+    // whatever a local build's InformationalVersion (and any +<git-sha> suffix) happens to be.
+    private static string runningVersion() =>
+        typeof(UpdateCheck).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "build-0";
+
+    private static string seedState(string version, DateTimeOffset checkedAt)
+    {
+        var state = new { Version = version, CheckedAt = checkedAt };
+        return JsonSerializer.Serialize(state);
+    }
+
+    private static void assertWrittenState(FakeFileSystem fileSystem, string expectedVersion, DateTimeOffset expectedCheckedAt)
+    {
+        using var document = JsonDocument.Parse(fileSystem.WrittenContent!);
+        Assert.AreEqual(expectedVersion, document.RootElement.GetProperty("Version").GetString());
+        Assert.AreEqual(expectedCheckedAt, document.RootElement.GetProperty("CheckedAt").GetDateTimeOffset());
     }
 
     private static UpdateCheck createUpdateCheck(
