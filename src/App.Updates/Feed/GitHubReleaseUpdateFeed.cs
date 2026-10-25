@@ -32,7 +32,7 @@ public sealed class GitHubReleaseUpdateFeed : IUpdateFeed
         {
             var url = _channel == UpdateChannel.Stable
                 ? $"https://api.github.com/repos/{_owner}/{_repo}/releases/latest"
-                : $"https://api.github.com/repos/{_owner}/{_repo}/releases?per_page=1";
+                : $"https://api.github.com/repos/{_owner}/{_repo}/releases?per_page=20";
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.UserAgent.ParseAdd($"{_repo}-update-check");
@@ -63,6 +63,10 @@ public sealed class GitHubReleaseUpdateFeed : IUpdateFeed
         }
     }
 
+    // The releases list endpoint's order isn't reliably newest-first in practice (confirmed
+    // against the real API: it can return older releases ahead of newer ones), so position 0
+    // can't be trusted. Pick the entry with the highest build number among the fetched page
+    // instead - BuildTag.TryParse already defines "newer" the same way IsNewer below does.
     private static JsonElement? selectRelease(JsonElement root, UpdateChannel channel)
     {
         if (channel == UpdateChannel.Stable)
@@ -70,7 +74,24 @@ public sealed class GitHubReleaseUpdateFeed : IUpdateFeed
             return root;
         }
 
-        return root.GetArrayLength() > 0 ? root[0] : null;
+        JsonElement? latest = null;
+        var latestRunNumber = -1L;
+        foreach (var release in root.EnumerateArray())
+        {
+            var tagName = release.GetProperty("tag_name").GetString();
+            if (tagName is null || !BuildTag.TryParse(tagName, out var runNumber))
+            {
+                continue;
+            }
+
+            if (latest is null || runNumber > latestRunNumber)
+            {
+                latest = release;
+                latestRunNumber = runNumber;
+            }
+        }
+
+        return latest;
     }
 
     private static UpdateInfo? toUpdateInfo(JsonElement release, string currentVersion)

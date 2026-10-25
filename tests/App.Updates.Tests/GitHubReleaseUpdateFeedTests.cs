@@ -25,7 +25,28 @@ public class GitHubReleaseUpdateFeedTests
 
         await feed.TryGetLatestIfNewerAsync("build-0", "client-1");
 
-        Assert.AreEqual("https://api.github.com/repos/owner/repo/releases?per_page=1", handler.RequestedUri);
+        Assert.AreEqual("https://api.github.com/repos/owner/repo/releases?per_page=20", handler.RequestedUri);
+    }
+
+    [TestMethod]
+    public async Task TryGetLatestIfNewerAsync_Beta_PicksTheHighestBuildNumber_RegardlessOfListOrder()
+    {
+        // The real releases list endpoint isn't reliably newest-first, so this deliberately
+        // puts the highest build number (12) in the middle rather than at index 0.
+        var handler = new RecordingHandler("""
+            [
+                {"tag_name":"build-5","assets":[]},
+                {"tag_name":"build-12","assets":[{"name":"App.Bundle.exe","browser_download_url":"https://example.com/build-12.exe"}]},
+                {"tag_name":"build-9","assets":[]}
+            ]
+            """);
+        var feed = new GitHubReleaseUpdateFeed(new HttpClient(handler), "owner", "repo", UpdateChannel.Beta);
+
+        var update = await feed.TryGetLatestIfNewerAsync("build-1", "client-1");
+
+        Assert.IsNotNull(update);
+        Assert.AreEqual("build-12", update.Version);
+        Assert.AreEqual("https://example.com/build-12.exe", update.DownloadUrl);
     }
 
     [TestMethod]
