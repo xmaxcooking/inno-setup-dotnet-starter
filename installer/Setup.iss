@@ -16,6 +16,17 @@ AppId={{B8F3E2A1-4C5D-4E6F-9A1B-2C3D4E5F6A7B}
 AppName=App.Client.Windows Sample
 AppVersion={#AppVersion}
 AppPublisher=Your Company
+; Makes Explorer's file Properties dialog and Task Manager show a real company/product name
+; for Setup.exe instead of nothing. This does NOT change what the UAC elevation prompt shows,
+; though: that prompt is driven by the executable's digital signature, not its version info -
+; for an unsigned exe (Setup.exe and the uninstaller both are, here) Windows shows "Unknown
+; publisher" and the raw filename regardless of these values, specifically because version-info
+; strings are trivially spoofable and Windows won't let them stand in for a real signature.
+VersionInfoCompany=Your Company
+VersionInfoDescription=App.Client.Windows Sample Setup
+VersionInfoProductName=App.Client.Windows Sample
+VersionInfoProductTextVersion={#AppVersion}
+VersionInfoVersion={#AppVersion}
 AppMutex=InnoSetupDotnetStarterAppMutex
 CloseApplications=yes
 RestartApplications=yes
