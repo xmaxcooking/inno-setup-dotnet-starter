@@ -7,7 +7,7 @@ namespace App.Updates.Tests;
 public class UpdateCheckTests
 {
     [TestMethod]
-    public async Task RunIfDueAsync_ReturnsFalse_AndSkipsTheFeed_WhenCheckedRecently()
+    public async Task CheckAsync_ReturnsNull_AndSkipsTheFeed_WhenCheckedRecently()
     {
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
@@ -15,15 +15,15 @@ public class UpdateCheckTests
         var feed = new FakeUpdateFeed(null);
         var check = createUpdateCheck(feed, fileSystem, now);
 
-        var result = await check.RunIfDueAsync();
+        var result = await check.CheckAsync();
 
-        Assert.IsFalse(result);
+        Assert.IsNull(result);
         Assert.IsFalse(feed.WasCalled);
         Assert.IsNull(fileSystem.WrittenContent);
     }
 
     [TestMethod]
-    public async Task RunIfDueAsync_ChecksAndReturnsFalse_WhenTheCheckIntervalHasElapsed()
+    public async Task CheckAsync_ChecksAndReturnsNull_WhenTheCheckIntervalHasElapsed()
     {
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
@@ -31,9 +31,9 @@ public class UpdateCheckTests
         var feed = new FakeUpdateFeed(null);
         var check = createUpdateCheck(feed, fileSystem, now);
 
-        var result = await check.RunIfDueAsync();
+        var result = await check.CheckAsync();
 
-        Assert.IsFalse(result);
+        Assert.IsNull(result);
         Assert.IsTrue(feed.WasCalled);
         Assert.AreEqual("the-client-id", feed.ReceivedClientId);
         Assert.AreEqual(now.ToString("O"), fileSystem.WrittenContent);
@@ -41,21 +41,21 @@ public class UpdateCheckTests
     }
 
     [TestMethod]
-    public async Task RunIfDueAsync_Checks_WhenNoPriorCheckWasRecorded()
+    public async Task CheckAsync_Checks_WhenNoPriorCheckWasRecorded()
     {
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
         var feed = new FakeUpdateFeed(null);
         var check = createUpdateCheck(feed, fileSystem, now);
 
-        var result = await check.RunIfDueAsync();
+        var result = await check.CheckAsync();
 
-        Assert.IsFalse(result);
+        Assert.IsNull(result);
         Assert.IsTrue(feed.WasCalled);
     }
 
     [TestMethod]
-    public async Task RunIfDueAsync_Checks_WhenTheStoredTimestampIsUnparsable()
+    public async Task CheckAsync_Checks_WhenTheStoredTimestampIsUnparsable()
     {
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
@@ -63,14 +63,14 @@ public class UpdateCheckTests
         var feed = new FakeUpdateFeed(null);
         var check = createUpdateCheck(feed, fileSystem, now);
 
-        var result = await check.RunIfDueAsync();
+        var result = await check.CheckAsync();
 
-        Assert.IsFalse(result);
+        Assert.IsNull(result);
         Assert.IsTrue(feed.WasCalled);
     }
 
     [TestMethod]
-    public async Task RunIfDueAsync_ReturnsFalse_AndNeverThrows_WhenTheFeedFails()
+    public async Task CheckAsync_ReturnsNull_AndNeverThrows_WhenTheFeedFails()
     {
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
@@ -78,13 +78,31 @@ public class UpdateCheckTests
         var feed = FakeUpdateFeed.ThatFails(failure);
         var check = createUpdateCheck(feed, fileSystem, now);
 
-        var result = await check.RunIfDueAsync();
+        var result = await check.CheckAsync();
 
-        Assert.IsFalse(result);
+        Assert.IsNull(result);
     }
 
     [TestMethod]
-    public async Task RunIfDueAsync_DownloadsAndLaunchesTheInstaller_WhenAnUpdateIsAvailable()
+    public async Task CheckAsync_ReturnsTheUpdate_WithoutDownloadingOrLaunchingAnything_WhenAnUpdateIsAvailable()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var fileSystem = new FakeFileSystem();
+        var update = new UpdateInfo("build-99", "https://example.com/installer.exe");
+        var feed = new FakeUpdateFeed(update);
+        var processLauncher = new FakeProcessLauncher();
+        var check = createUpdateCheck(feed, fileSystem, now, processLauncher: processLauncher);
+
+        var result = await check.CheckAsync();
+
+        Assert.AreSame(update, result);
+        Assert.AreEqual(0, fileSystem.CreatedFilePaths.Count);
+        Assert.AreEqual(0, processLauncher.StartedPaths.Count);
+        Assert.AreEqual(now.ToString("O"), fileSystem.WrittenContent);
+    }
+
+    [TestMethod]
+    public async Task DownloadAndLaunchAsync_DownloadsAndLaunchesTheInstaller()
     {
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
@@ -96,15 +114,13 @@ public class UpdateCheckTests
         var processLauncher = new FakeProcessLauncher();
         var check = createUpdateCheck(feed, fileSystem, now, httpClientFactory, processLauncher);
 
-        var result = await check.RunIfDueAsync();
+        await check.DownloadAndLaunchAsync(update);
 
-        Assert.IsTrue(result);
         Assert.AreEqual("https://example.com/installer.exe", handler.RequestedUri);
         Assert.AreEqual(1, fileSystem.CreatedFilePaths.Count);
         Assert.AreEqual(1, processLauncher.StartedPaths.Count);
         Assert.AreEqual(fileSystem.CreatedFilePaths[0], processLauncher.StartedPaths[0]);
         Assert.IsTrue(processLauncher.StartedPaths[0].Contains("build-99"));
-        Assert.AreEqual(now.ToString("O"), fileSystem.WrittenContent);
     }
 
     private static UpdateCheck createUpdateCheck(

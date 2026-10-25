@@ -34,14 +34,14 @@ public sealed class UpdateCheck
         _logger = logger;
     }
 
-    public async Task<bool> RunIfDueAsync()
+    public async Task<UpdateInfo?> CheckAsync()
     {
         try
         {
             if (!isDue())
             {
                 _logger.LogDebug("Update check skipped; not due yet.");
-                return false;
+                return null;
             }
 
             using var cts = new CancellationTokenSource(_overallTimeout);
@@ -53,24 +53,20 @@ public sealed class UpdateCheck
 
             recordChecked();
 
-            if (update is null)
-            {
-                return false;
-            }
-
-            await downloadAndLaunchAsync(update, cts.Token);
-            return true;
+            return update;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Update check failed; continuing to start normally.");
-            return false;
+            return null;
         }
     }
 
-    private async Task downloadAndLaunchAsync(UpdateInfo update, CancellationToken cancellationToken)
+    public async Task DownloadAndLaunchAsync(UpdateInfo update)
     {
-        _logger.LogInformation("Update {Version} found; downloading and launching installer.", update.Version);
+        _logger.LogInformation("Update {Version} confirmed by the user; downloading and launching installer.", update.Version);
+
+        using var cts = new CancellationTokenSource(_overallTimeout);
 
         var installerPath = Path.Combine(Path.GetTempPath(), $"inno-setup-dotnet-starter-{update.Version}.exe");
 
@@ -79,7 +75,7 @@ public sealed class UpdateCheck
         {
             using (var destination = _fileSystem.CreateFile(installerPath))
             {
-                await source.CopyToAsync(destination, 81920, cancellationToken);
+                await source.CopyToAsync(destination, 81920, cts.Token);
             }
         }
 
