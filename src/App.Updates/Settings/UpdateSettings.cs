@@ -15,11 +15,13 @@ public sealed class UpdateSettings : IUpdateSettingsStore
     };
 
     private readonly IFileSystem _fileSystem;
+    private readonly IDefaultUpdateChannel _defaultUpdateChannel;
     private readonly ILogger<UpdateSettings> _logger;
 
-    public UpdateSettings(IFileSystem fileSystem, ILogger<UpdateSettings> logger)
+    public UpdateSettings(IFileSystem fileSystem, IDefaultUpdateChannel defaultUpdateChannel, ILogger<UpdateSettings> logger)
     {
         _fileSystem = fileSystem;
+        _defaultUpdateChannel = defaultUpdateChannel;
         _logger = logger;
     }
 
@@ -29,16 +31,16 @@ public sealed class UpdateSettings : IUpdateSettingsStore
         {
             if (!_fileSystem.FileExists(SpecialFiles.Settings))
             {
-                return UpdateChannel.Stable;
+                return _defaultUpdateChannel.Value;
             }
 
             var settings = JsonSerializer.Deserialize<StoredSettings>(_fileSystem.ReadAllText(SpecialFiles.Settings), _jsonOptions);
-            return settings?.Channel ?? UpdateChannel.Stable;
+            return settings?.Channel ?? _defaultUpdateChannel.Value;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Could not read update-channel setting; defaulting to Stable.");
-            return UpdateChannel.Stable;
+            _logger.LogWarning(ex, "Could not read update-channel setting; using the default channel.");
+            return _defaultUpdateChannel.Value;
         }
     }
 

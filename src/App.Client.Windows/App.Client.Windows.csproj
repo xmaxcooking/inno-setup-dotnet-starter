@@ -15,6 +15,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>..\..\assets\icon.ico</ApplicationIcon>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <!-- Default for local/manual builds; Fallout's packInstaller target overrides this to match
+         publishRelease's Prerelease flag, so a shipped build defaults new installs to the Beta channel
+         exactly when the release it came from was published as a prerelease. -->
+    <InnoSetupDotnetStarterIsPrereleaseBuild Condition="'$(InnoSetupDotnetStarterIsPrereleaseBuild)' == ''">true</InnoSetupDotnetStarterIsPrereleaseBuild>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,6 +30,7 @@
   <ItemGroup>
     <AssemblyMetadata Include="GitHubOwner" Value="xmaxcooking" />
     <AssemblyMetadata Include="GitHubRepo" Value="inno-setup-dotnet-starter" />
+    <AssemblyMetadata Include="IsPrereleaseBuild" Value="$(InnoSetupDotnetStarterIsPrereleaseBuild)" />
   </ItemGroup>
 
   <ItemGroup>

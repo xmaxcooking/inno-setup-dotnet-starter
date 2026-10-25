@@ -30,6 +30,9 @@ internal class Build : FalloutBuild
 {
     public static int Main() => Execute<Build>(x => x.test);
 
+    [Parameter("Whether this build is a prerelease - Default is true", Name = "IsPrereleaseBuild")]
+    private readonly bool _isPrereleaseBuild = true;
+
     [Parameter("Configuration to build - Default is 'Debug' (local) or 'Release' (server)", Name = "Configuration")]
     private readonly Configuration _configuration = IsLocalBuild ? Configuration.Debug : Configuration.Release;
 
@@ -103,7 +106,8 @@ internal class Build : FalloutBuild
                 .SetRuntime("win-x64")
                 .DisableSelfContained()
                 .SetOutput(publishDirectory)
-                .SetProperty("InformationalVersion", releaseTag));
+                .SetProperty("InformationalVersion", releaseTag)
+                .SetProperty("InnoSetupDotnetStarterIsPrereleaseBuild", _isPrereleaseBuild ? "true" : "false"));
 
             DotNetPublish(s => s
                 .SetProject(RootDirectory / "installer" / "App.Installer.Tool" / "App.Installer.Tool.csproj")
@@ -156,7 +160,7 @@ internal class Build : FalloutBuild
                 {
                     Name = tag,
                     TargetCommitish = GitHubActions.Instance.Sha,
-                    Prerelease = true,
+                    Prerelease = _isPrereleaseBuild,
                     Body = $"Automated build from commit {GitHubActions.Instance.Sha}."
                 });
 

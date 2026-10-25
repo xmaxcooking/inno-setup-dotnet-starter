@@ -18,6 +18,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<IFileSystem, FileSystemIO>();
         services.AddSingleton<IClientIdentity, ClientIdentity>();
+        services.AddSingleton<IDefaultUpdateChannel, AssemblyMetadataDefaultUpdateChannel>();
         services.AddSingleton<IUpdateSettingsStore, UpdateSettings>();
         services.AddSingleton<ISystemDateTime, SystemDateTime>();
         services.AddSingleton<IProcessLauncher, ProcessLauncher>();
