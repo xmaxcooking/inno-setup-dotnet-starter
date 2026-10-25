@@ -6,13 +6,13 @@
     <File Path=".editorconfig" />
     <File Path=".gitattributes" />
     <File Path=".gitignore" />
-    <File Path="build.ps1" />
-    <File Path="build.sh" />
     <File Path="README.md" />
     <File Path="build/Directory.Build.props" />
     <File Path="build/Directory.Build.targets" />
   </Folder>
   <Folder Name="/build/">
+    <File Path="build.ps1" />
+    <File Path="build.sh" />
     <Project Path="build/App.Build.csproj">
       <Build Project="false" />
     </Project>
