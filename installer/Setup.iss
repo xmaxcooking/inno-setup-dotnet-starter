@@ -12,7 +12,7 @@
 #endif
 
 [Setup]
-AppId={{B8F3E2A1-4C5D-4E6F-9A1B-2C3D4E5F6A7B}}
+AppId={{B8F3E2A1-4C5D-4E6F-9A1B-2C3D4E5F6A7B}
 AppName=App.Client.Windows Sample
 AppVersion={#AppVersion}
 AppPublisher=Your Company
