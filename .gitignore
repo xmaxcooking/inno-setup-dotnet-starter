@@ -1,0 +1,25 @@
+## .NET / Visual Studio
+
+bin/
+obj/
+out/
+*.user
+*.suo
+.vs/
+.vscode/
+
+# Fallout build pipeline - generated/local, parameters.json is checked in
+.fallout/temp/
+.fallout/build.schema.json
+artifacts/
+
+# Rider
+.idea/
+*.sln.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Serena
+.serena

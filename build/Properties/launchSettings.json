@@ -1,0 +1,28 @@
+{
+  "profiles": {
+    "Clean": {
+      "commandName": "Project",
+      "commandLineArgs": "Clean"
+    },
+    "Restore": {
+      "commandName": "Project",
+      "commandLineArgs": "Restore"
+    },
+    "Compile": {
+      "commandName": "Project",
+      "commandLineArgs": "Compile"
+    },
+    "Test": {
+      "commandName": "Project",
+      "commandLineArgs": "Test"
+    },
+    "PackInstaller": {
+      "commandName": "Project",
+      "commandLineArgs": "PackInstaller"
+    },
+    "PackInstaller (Release)": {
+      "commandName": "Project",
+      "commandLineArgs": "PackInstaller --configuration Release"
+    }
+  }
+}
