@@ -13,6 +13,7 @@ public sealed class UpdateCheck
 {
     private static readonly TimeSpan _checkInterval = TimeSpan.FromHours(1);
     private static readonly TimeSpan _overallTimeout = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan _downloadTimeout = TimeSpan.FromMinutes(5);
 
     private readonly IUpdateFeed _feed;
     private readonly IClientIdentity _clientIdentity;
@@ -63,24 +64,48 @@ public sealed class UpdateCheck
         }
     }
 
-    public async Task DownloadAndLaunchAsync(UpdateInfo update)
+    public async Task DownloadAndLaunchAsync(UpdateInfo update, IProgress<double>? progress = null)
     {
         _logger.LogInformation("Update {Version} confirmed by the user; downloading and launching installer.", update.Version);
 
-        using var cts = new CancellationTokenSource(_overallTimeout);
+        using var cts = new CancellationTokenSource(_downloadTimeout);
 
         var installerPath = Path.Combine(Path.GetTempPath(), $"inno-setup-dotnet-starter-{update.Version}.exe");
 
         var httpClient = _httpClientFactory.CreateClient(nameof(UpdateCheck));
-        using (var source = await httpClient.GetStreamAsync(update.DownloadUrl))
+        using (var response = await httpClient.GetAsync(update.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token))
         {
-            using (var destination = _fileSystem.CreateFile(installerPath))
+            response.EnsureSuccessStatusCode();
+            var totalBytes = response.Content.Headers.ContentLength;
+
+            using (var source = await response.Content.ReadAsStreamAsync())
             {
-                await source.CopyToAsync(destination, 81920, cts.Token);
+                using (var destination = _fileSystem.CreateFile(installerPath))
+                {
+                    await copyWithProgressAsync(source, destination, totalBytes, progress, cts.Token);
+                }
             }
         }
 
         _processLauncher.Start(installerPath);
+    }
+
+    private static async Task copyWithProgressAsync(
+        Stream source, Stream destination, long? totalBytes, IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[81920];
+        var totalRead = 0L;
+        int bytesRead;
+        while ((bytesRead = await source.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
+        {
+            await destination.WriteAsync(buffer, 0, bytesRead, cancellationToken);
+            totalRead += bytesRead;
+
+            if (totalBytes is > 0)
+            {
+                progress?.Report((double)totalRead / totalBytes.Value);
+            }
+        }
     }
 
     // Due regardless of the cooldown below whenever the running version differs from the one

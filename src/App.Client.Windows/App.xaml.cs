@@ -62,7 +62,7 @@ public partial class App : Application
 
         try
         {
-            await updateCheck.DownloadAndLaunchAsync(update);
+            await downloadWithProgressAsync(updateCheck, update);
 
             // A hard, immediate process exit (not the async Application.Exit()) so the mutex
             // above and any locked files are released before the installer we just launched
@@ -72,6 +72,39 @@ public partial class App : Application
         catch (Exception ex)
         {
             provider.GetRequiredService<ILogger<App>>().LogWarning(ex, "Failed to download or launch the confirmed update.");
+        }
+    }
+
+    private async Task downloadWithProgressAsync(UpdateCheck updateCheck, UpdateInfo update)
+    {
+        var statusText = new TextBlock { Text = "Starting download…" };
+        var progressBar = new ProgressBar { IsIndeterminate = true, Width = 280 };
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(statusText);
+        panel.Children.Add(progressBar);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Downloading update",
+            Content = panel,
+            XamlRoot = _mainWindow!.Content.XamlRoot
+        };
+
+        var progress = new Progress<double>(fraction =>
+        {
+            progressBar.IsIndeterminate = false;
+            progressBar.Value = fraction * 100;
+            statusText.Text = $"Downloading… {fraction:P0}";
+        });
+
+        _ = dialog.ShowAsync();
+        try
+        {
+            await updateCheck.DownloadAndLaunchAsync(update, progress);
+        }
+        finally
+        {
+            dialog.Hide();
         }
     }
 
