@@ -119,15 +119,25 @@ configure. `global.json` pins the SDK version `actions/setup-dotnet` installs.
     release-manual.yml`) whenever a maintainer decides master is ready sooner than the next train.
 - **`hotfix/*` branches** release immediately on every push, no waiting for a train - branch off
   an existing release's tag (e.g. `git checkout -b hotfix/1.0 v1.0.12`), cherry-pick the fix, push.
-- The release tag is computed by `computeReleaseTag()` in `Build.cs`: `VersionMajor`/`VersionMinor`
-  are plain constants in that file - bump them manually (breaking change → Major, new feature →
-  Minor) and commit the change on whichever branch needs it. `PATCH` is *not* a global counter -
-  it's looked up by querying GitHub for the highest existing release tag matching that exact
-  `v{Major}.{Minor}.*` and adding one. This is what makes hotfix branches work correctly: a
-  `hotfix/1.0` branch keeps whatever `Major`/`Minor` were committed at the tag it was cut from, so
-  it continues *that* line's patch sequence independently of whatever master's `Major`/`Minor` has
-  moved on to since - `v1.0.12` plus a hotfix becomes `v1.0.13`, even if master is already shipping
-  `v1.1.*`.
+
+The version itself is derived, not manually tracked - there's no `VersionMajor`/`VersionMinor` to
+bump by hand. `computeNextRelease()` in `Build.cs`:
+1. Finds the highest-versioned existing release that's an actual git ancestor of `HEAD` - not just
+   the globally highest release - so a `hotfix/1.0` branch cut from `v1.0.12` bumps from `v1.0.12`,
+   even while master has already moved on to `v1.1.0`/`v2.0.0`.
+2. Reads every commit message since that release (`git log <sha>..HEAD`) and classifies each one
+   using [Conventional Commits](https://www.conventionalcommits.org/) - the same convention tools
+   like semantic-release and GitVersion read: `fix:` → Patch, `feat:` → Minor, a `!` after the
+   type/scope or a `BREAKING CHANGE:` footer → Major. Anything else (`chore:`, `docs:`, a plain
+   non-conventional message) contributes no bump.
+3. Takes the *strongest* bump found and applies it to the base version - `v1.0.12` plus a `fix:`
+   commit becomes `v1.0.13`; a `feat:` commit anywhere in the range makes it `v1.1.0` instead,
+   even if other commits in the same range were only `fix:`.
+
+**This means commit messages matter now** - a release is only ever cut when at least one commit
+since the last one uses `feat:`, `fix:`, or a breaking-change marker; a branch or day with only
+`chore:`/`docs:`/non-conventional commits produces no release at all (`shouldPublishRelease`
+returns `false`), the same as real semantic-release. Write commits accordingly.
 
 Every release is a GitHub prerelease by design; there's no automated "promote to stable" step.
 To promote a build so the Stable update channel (see `src/App.Updates/`) picks it up, open that

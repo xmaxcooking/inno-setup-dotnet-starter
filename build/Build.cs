@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using static Fallout.Common.EnvironmentInfo;
 using static Fallout.Common.Tools.DotNet.DotNetTasks;
 
@@ -33,7 +34,8 @@ using static Fallout.Common.Tools.DotNet.DotNetTasks;
     WritePermissions = new[] { GitHubActionsPermissions.Contents },
     PublishArtifacts = false,
     ConcurrencyGroup = "release-${{ github.ref }}",
-    ConcurrencyCancelInProgress = false)]
+    ConcurrencyCancelInProgress = false,
+    FetchDepth = 0)]
 // A separate workflow file for the manual-dispatch trigger - Fallout doesn't allow mixing the
 // On*-style detailed triggers above (push/cron) with the shorthand On trigger list in one
 // [GitHubActions] attribute, so this is a second, minimal workflow that invokes the same target.
@@ -46,17 +48,11 @@ using static Fallout.Common.Tools.DotNet.DotNetTasks;
     WritePermissions = new[] { GitHubActionsPermissions.Contents },
     PublishArtifacts = false,
     ConcurrencyGroup = "release-${{ github.ref }}",
-    ConcurrencyCancelInProgress = false)]
+    ConcurrencyCancelInProgress = false,
+    FetchDepth = 0)]
 internal class Build : FalloutBuild
 {
     public static int Main() => Execute<Build>(x => x.test);
-
-    // Bump Major for a breaking change, Minor for a new feature - commit the change on master
-    // and the next train (or a manual dispatch) picks it up. A hotfix branch keeps whatever was
-    // committed here at the tag it was cut from, so it keeps extending that older line's patch
-    // sequence independently of whatever master has moved on to.
-    private const int VersionMajor = 1;
-    private const int VersionMinor = 0;
 
     [Parameter("Whether this build is a prerelease - Default is true", Name = "IsPrereleaseBuild")]
     private readonly bool _isPrereleaseBuild = true;
@@ -76,42 +72,43 @@ internal class Build : FalloutBuild
     private AbsolutePath toolPublishDirectory => RootDirectory / "artifacts" / "publish" / "App.Installer.Tool";
     private AbsolutePath setupScript => RootDirectory / "installer" / "Setup.iss";
 
-    private Lazy<string> _releaseTag;
+    // None < Patch < Minor < Major - deliberately ordered so the strongest bump found among a set
+    // of commits can be picked with a plain `>` comparison.
+    private enum VersionBump { None, Patch, Minor, Major }
 
-    private string releaseTag
+    private (string Tag, VersionBump Bump)? _nextRelease;
+
+    private (string Tag, VersionBump Bump) nextRelease
     {
         get
         {
-            _releaseTag ??= new Lazy<string>(computeReleaseTag);
-            return _releaseTag.Value;
+            _nextRelease ??= computeNextRelease();
+            return _nextRelease.Value;
         }
     }
 
-    // A plain push-to-master should skip actually publishing - that's the one trigger that would
-    // otherwise fire on every commit. The weekday train (a schedule trigger) also skips it, but
-    // only when master's HEAD was already released by an earlier train or hotfix - otherwise the
-    // train would depart and cut a no-op release, re-tagging identical bits, every single weekday
-    // even without a single new commit. A hotfix branch push or a manual dispatch always publish.
+    private string releaseTag => nextRelease.Tag;
+
+    // A release is only worth publishing when there's something release-worthy since the last
+    // one (nextRelease.Bump != None - a day/branch with only chore/docs commits, or none at all,
+    // produces no release at all, same as real semantic-release) and, for a plain push, only when
+    // it's a hotfix branch - a plain push to master always waits for the next train or a manual
+    // dispatch instead, so pushing to master repeatedly doesn't spam users with update prompts.
     private bool shouldPublishRelease
     {
         get
         {
+            if (nextRelease.Bump == VersionBump.None)
+            {
+                return false;
+            }
+
             if (GitHubActions.Instance is not { } gitHubActions)
             {
                 return true;
             }
 
-            if (gitHubActions.EventName == "push")
-            {
-                return gitHubActions.RefName != "master";
-            }
-
-            if (gitHubActions.EventName == "schedule")
-            {
-                return existingReleases().All(release => release.TargetCommitish != gitHubActions.Sha);
-            }
-
-            return true;
+            return gitHubActions.EventName != "push" || gitHubActions.RefName != "master";
         }
     }
 
@@ -144,30 +141,121 @@ internal class Build : FalloutBuild
         return _existingReleases;
     }
 
-    private string computeReleaseTag()
+    // The base to bump from is the highest-versioned existing release that's actually an ancestor
+    // of HEAD - not just the globally highest release - so a hotfix branch cut from an old v1.0.x
+    // tag bumps from v1.0.x, even while master has already moved on to a newer v1.1.0/v2.0.0.
+    private (int Major, int Minor, int Patch, string Sha) findLastRelease()
     {
-        if (GitHubActions.Instance is null)
-        {
-            return SemanticVersion.Format(VersionMajor, VersionMinor, 0);
-        }
+        Version highestVersion = null;
+        string highestSha = null;
 
-        var prefix = $"v{VersionMajor}.{VersionMinor}.";
-
-        var highestExistingPatch = -1;
         foreach (var release in existingReleases())
         {
-            if (!release.TagName.StartsWith(prefix, StringComparison.Ordinal))
+            if (SemanticVersion.Parse(release.TagName) is not { } version
+                || release.TargetCommitish is not { } sha
+                || (highestVersion is not null && version <= highestVersion)
+                || !isAncestorOfHead(sha))
             {
                 continue;
             }
 
-            if (int.TryParse(release.TagName.AsSpan(prefix.Length), out var patch) && patch > highestExistingPatch)
+            highestVersion = version;
+            highestSha = sha;
+        }
+
+        return highestVersion is null
+            ? (0, 0, 0, null)
+            : (highestVersion.Major, highestVersion.Minor, highestVersion.Build, highestSha);
+    }
+
+    private static bool isAncestorOfHead(string sha)
+    {
+        var startInfo = new ProcessStartInfo("git", $"merge-base --is-ancestor {sha} HEAD")
+        {
+            UseShellExecute = false,
+            WorkingDirectory = RootDirectory
+        };
+
+        using var process = Process.Start(startInfo);
+        process.WaitForExit();
+        return process.ExitCode == 0;
+    }
+
+    // Conventional Commits (https://www.conventionalcommits.org/), the same convention
+    // semantic-release/GitVersion read: "feat:" -> Minor, "fix:" -> Patch, a "!" after the
+    // type/scope or a "BREAKING CHANGE:" footer -> Major. Anything else (chore/docs/refactor/an
+    // unconventional message) contributes no bump at all.
+    private static VersionBump classifyCommitMessage(string message)
+    {
+        var subjectLine = message.Split('\n')[0];
+
+        if (message.Contains("BREAKING CHANGE:", StringComparison.Ordinal)
+            || message.Contains("BREAKING-CHANGE:", StringComparison.Ordinal)
+            || Regex.IsMatch(subjectLine, @"^\w+(\([^)]*\))?!:"))
+        {
+            return VersionBump.Major;
+        }
+
+        if (Regex.IsMatch(subjectLine, @"^feat(\([^)]*\))?:", RegexOptions.IgnoreCase))
+        {
+            return VersionBump.Minor;
+        }
+
+        if (Regex.IsMatch(subjectLine, @"^fix(\([^)]*\))?:", RegexOptions.IgnoreCase))
+        {
+            return VersionBump.Patch;
+        }
+
+        return VersionBump.None;
+    }
+
+    private static IReadOnlyList<string> commitMessagesSince(string sha)
+    {
+        var range = sha is null ? "HEAD" : $"{sha}..HEAD";
+
+        var startInfo = new ProcessStartInfo("git", $"log {range} --pretty=format:%B%x00")
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            WorkingDirectory = RootDirectory
+        };
+
+        using var process = Process.Start(startInfo);
+        var output = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+
+        return output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    private (string Tag, VersionBump Bump) computeNextRelease()
+    {
+        if (GitHubActions.Instance is null)
+        {
+            return (SemanticVersion.Format(1, 0, 0), VersionBump.Patch);
+        }
+
+        var (baseMajor, baseMinor, basePatch, baseSha) = findLastRelease();
+
+        var bump = VersionBump.None;
+        foreach (var message in commitMessagesSince(baseSha))
+        {
+            var commitBump = classifyCommitMessage(message);
+            if (commitBump > bump)
             {
-                highestExistingPatch = patch;
+                bump = commitBump;
             }
         }
 
-        return SemanticVersion.Format(VersionMajor, VersionMinor, highestExistingPatch + 1);
+        var tag = bump switch
+        {
+            VersionBump.Major => SemanticVersion.Format(baseMajor + 1, 0, 0),
+            VersionBump.Minor => SemanticVersion.Format(baseMajor, baseMinor + 1, 0),
+            VersionBump.Patch => SemanticVersion.Format(baseMajor, baseMinor, basePatch + 1),
+            VersionBump.None => SemanticVersion.Format(baseMajor, baseMinor, basePatch),
+            _ => throw new InvalidOperationException($"Unrecognized {nameof(VersionBump)}: {bump}")
+        };
+
+        return (tag, bump);
     }
 
     private Target clean => _ => _
@@ -280,7 +368,11 @@ internal class Build : FalloutBuild
         {
             if (!shouldPublishRelease)
             {
-                Log.Information("Plain push to master - build and tests passed, but skipping the actual release so master pushes don't spam users with update prompts.");
+                Log.Information(
+                    "Build and tests passed, but skipping the actual release ({Reason}).",
+                    nextRelease.Bump == VersionBump.None
+                        ? "nothing release-worthy (feat/fix/BREAKING CHANGE) since the last release"
+                        : "plain push to master - waiting for the next train or a manual dispatch");
                 return;
             }
 
