@@ -186,12 +186,13 @@ which can't represent those characters.
   `xmaxcooking`/`inno-setup-dotnet-starter` `AssemblyMetadata` values in
   `src/App.Client.Windows/App.Client.Windows.csproj` (read by `App.Updates` to know which GitHub
   repo to check for updates), before shipping anything built from this template.
-- `installer/Setup.iss`'s `[Code]` section always attempts the Windows App Runtime install with
-  no detection check, mirroring a deliberate choice in the WiX sibling template (the installer
-  itself is idempotent/quiet) - this app doesn't actually use the Windows App SDK/WinUI runtime
-  beyond what's already chained for .NET Desktop Runtime's sibling concerns; if you add a real
-  WinUI/Windows App SDK dependency, keep this block, otherwise it's safe to delete along with the
-  `Microsoft.WindowsAppSDK` package reference if you ever drop WinUI entirely.
+- `installer/Setup.iss`'s `[Code]` section downloads and installs the Windows App Runtime and
+  the .NET Desktop Runtime - keep this block if you keep the `Microsoft.WindowsAppSDK` package
+  reference (WinUI), otherwise it's safe to delete along with that package reference if you ever
+  drop WinUI entirely. `IsWindowsAppRuntimeInstalled` shells out to PowerShell's
+  `Get-AppxPackage` to skip the ~120 MB download/install when a compatible runtime is already
+  present - there's no registry-only equivalent, since Windows App Runtime is deployed as MSIX
+  packages rather than a classic MSI/registry install.
 - `App.Domain` is the seam for real domain models; `App.Infrastructure` holds both the data
   access abstraction (`IAppDbContext`) and its real implementation (e.g. a real EF Core
   `DbContext` in place of `FakeDbContext`) - `IAppDbContext` mirrors EF Core's own `DbContext`

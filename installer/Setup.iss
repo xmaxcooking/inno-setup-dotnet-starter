@@ -144,6 +144,21 @@ begin
   Result := RegKeyExists(HKLM64, 'SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App');
 end;
 
+function IsWindowsAppRuntimeInstalled(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  { Windows App Runtime is deployed as MSIX/Appx framework packages, not a classic MSI/registry
+    install - there's no RegKeyExists equivalent for it (confirmed on this machine: no
+    HKLM\...\Uninstall entry exists for it despite several Microsoft.WindowsAppRuntime.2.x.x.x
+    Appx packages actually being present). Get-AppxPackage is the only reliable check, so shell
+    out to PowerShell for it rather than always downloading and running the ~120 MB installer
+    unconditionally, even when a compatible runtime is already there. }
+  Result := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -NonInteractive -Command "if ((Get-AppxPackage -Name ''Microsoft.WindowsAppRuntime.2*'').Count -gt 0) { exit 0 } else { exit 1 }"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+end;
+
 { Runs the bundled App.Installer.Tool.exe and returns its stdout as one array element per line. The
   country dropdown and the dependent customer list below are both populated this way, from the real
   App.Domain/App.Infrastructure classes the app itself uses - not from data hardcoded in this script. }
@@ -249,15 +264,15 @@ begin
         '55a67d8476cde95a9cc43a95803b4f54446e7c9251ed22aa6421d4908174ae84');
     end;
 
-    { Windows App Runtime has no DetectCondition at all, mirroring the WiX repo's WindowsAppRuntime.wxs:
-      the runtime installer itself is idempotent/quiet, so this is a deliberate, documented choice to
-      always attempt the install rather than an oversight.
-      URL/size/hash verified live this session: HTTP 200 behind the aka.ms redirect, Content-Length
-      120199480, SHA256 computed from the actual downloaded file. }
-    DownloadPage.Add(
-      'https://aka.ms/windowsappsdk/2.5/2.5.1/windowsappruntimeinstall-x64.exe',
-      'windowsappruntimeinstall-x64.exe',
-      '931a421e8dc3e6e67724806cb67fecdbb88dfe323f0170842eb4a4b4b149f1e2');
+    if not IsWindowsAppRuntimeInstalled() then
+    begin
+      { URL/size/hash verified live this session: HTTP 200 behind the aka.ms redirect, Content-Length
+        120199480, SHA256 computed from the actual downloaded file. }
+      DownloadPage.Add(
+        'https://aka.ms/windowsappsdk/2.5/2.5.1/windowsappruntimeinstall-x64.exe',
+        'windowsappruntimeinstall-x64.exe',
+        '931a421e8dc3e6e67724806cb67fecdbb88dfe323f0170842eb4a4b4b149f1e2');
+    end;
 
     DownloadPage.Show;
     try
@@ -285,10 +300,12 @@ begin
           Log('.NET Desktop Runtime install failed (exit code ' + IntToStr(ResultCode) + ').');
       end;
 
-      { No DetectCondition for this one - always run it, same as the WiX repo's WindowsAppRuntime.wxs. }
-      if not Exec(ExpandConstant('{tmp}\windowsappruntimeinstall-x64.exe'), '--quiet', '',
-          SW_SHOW, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
-        Log('Windows App Runtime install failed (exit code ' + IntToStr(ResultCode) + ').');
+      if not IsWindowsAppRuntimeInstalled() then
+      begin
+        if not Exec(ExpandConstant('{tmp}\windowsappruntimeinstall-x64.exe'), '--quiet', '',
+            SW_SHOW, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+          Log('Windows App Runtime install failed (exit code ' + IntToStr(ResultCode) + ').');
+      end;
     end;
   end;
 end;
