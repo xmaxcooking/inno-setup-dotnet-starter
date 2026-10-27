@@ -110,8 +110,9 @@ configure. `global.json` pins the SDK version `actions/setup-dotnet` installs.
   publish a release on its own (`shouldPublishRelease` in `Build.cs`) - otherwise every commit to
   master would prompt every installed app to update, which gets old fast. A release only actually
   gets cut from master by:
-  - the **daily train**: `release.yml`'s `OnCronSchedule` (`0 3 * * *`, UTC) builds and publishes
-    whatever is on master's HEAD at that time;
+  - the **weekday train**: `release.yml`'s `OnCronSchedule` (`0 3 * * 1-5`, UTC - Monday through
+    Friday, so 5 times a week, not weekends) builds and publishes whatever is on master's HEAD at
+    that time;
   - a **manual dispatch**: run `release-manual.yml` from the Actions tab (or `gh workflow run
     release-manual.yml`) whenever a maintainer decides master is ready sooner than the next train.
 - **`hotfix/*` branches** release immediately on every push, no waiting for a train - branch off

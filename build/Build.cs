@@ -8,6 +8,7 @@ using Fallout.Common.Tools.GitHub;
 using Fallout.Common.Utilities.Collections;
 using Fallout.Solutions;
 using Octokit;
+using Serilog;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -18,14 +19,14 @@ using static Fallout.Common.Tools.DotNet.DotNetTasks;
 // [GitHubActions] generates .github/workflows/release.yml from the attribute below; never hand-edit the .yml.
 //
 // master pushes and hotfix/** pushes both run this workflow, but only hotfix pushes (and the
-// daily/manual train below) actually publish a release - a plain master push only builds and
+// weekday/manual train below) actually publish a release - a plain master push only builds and
 // tests, so pushing to master repeatedly during a day doesn't spam users with update prompts.
 // See shouldPublishRelease.
 [GitHubActions(
     "release",
     GitHubActionsImage.WindowsLatest,
     OnPushBranches = new[] { "master", "hotfix/**" },
-    OnCronSchedule = "0 3 * * *",
+    OnCronSchedule = "0 3 * * 1-5",
     InvokedTargets = new[] { nameof(publishRelease) },
     EnableGitHubToken = true,
     WritePermissions = new[] { GitHubActionsPermissions.Contents },
@@ -87,7 +88,7 @@ internal class Build : FalloutBuild
 
     // Only a plain push-to-master in CI should skip actually publishing - that's the one case
     // that would otherwise fire on every commit. Everything else (a local run, a hotfix branch
-    // push, the daily train, or a manual dispatch) is a deliberate "publish now" signal.
+    // push, the weekday train, or a manual dispatch) is a deliberate "publish now" signal.
     private bool shouldPublishRelease =>
         GitHubActions.Instance is not { } gitHubActions
         || gitHubActions.EventName != "push"
@@ -245,7 +246,7 @@ internal class Build : FalloutBuild
         {
             if (!shouldPublishRelease)
             {
-                Console.WriteLine("Plain push to master - build and tests passed, but skipping the actual release so master pushes don't spam users with update prompts.");
+                Log.Information("Plain push to master - build and tests passed, but skipping the actual release so master pushes don't spam users with update prompts.");
                 return;
             }
 
