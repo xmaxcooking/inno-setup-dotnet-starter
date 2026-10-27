@@ -235,6 +235,49 @@ internal class Build : FalloutBuild
         return output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
     }
 
+    // Every commit must follow Conventional Commits (feat:/fix:/chore:/etc.) - not just the
+    // feat:/fix:/breaking-change ones that actually affect the version, since an unconventional
+    // message among those would silently contribute no bump at all (see classifyCommitMessage)
+    // rather than being caught as the mistake it almost certainly is.
+    private static readonly string[] _conventionalCommitTypes =
+        ["feat", "fix", "build", "chore", "ci", "docs", "style", "refactor", "perf", "test", "revert"];
+
+    private static IReadOnlyList<string> commitMessagesToVerify()
+    {
+        if (GitHubActions.Instance is not { } gitHubActions)
+        {
+            return commitMessagesSince("HEAD~1");
+        }
+
+        if (gitHubActions.EventName != "push")
+        {
+            return [];
+        }
+
+        var beforeSha = gitHubActions.GitHubEvent["before"]?.GetValue<string>();
+        var isFirstPushToThisRef = beforeSha is null || beforeSha == new string('0', 40);
+
+        return commitMessagesSince(isFirstPushToThisRef ? "HEAD~1" : beforeSha);
+    }
+
+    private Target verifyCommitMessages => _ => _
+        .Executes(() =>
+        {
+            var typePattern = string.Join("|", _conventionalCommitTypes);
+            var subjectPattern = new Regex($@"^({typePattern})(\([^)]*\))?!?: .+");
+
+            foreach (var message in commitMessagesToVerify())
+            {
+                var subjectLine = message.Split('\n')[0];
+                if (!subjectPattern.IsMatch(subjectLine))
+                {
+                    throw new InvalidOperationException(
+                        $"Commit message doesn't follow Conventional Commits (https://www.conventionalcommits.org/) - "
+                        + $"expected \"<{typePattern}>(optional-scope)!: description\", got: \"{subjectLine}\"");
+                }
+            }
+        });
+
     private (string Tag, VersionBump Bump) computeNextRelease()
     {
         if (GitHubActions.Instance is null)
@@ -287,7 +330,7 @@ internal class Build : FalloutBuild
             .EnableNoRestore()));
 
     private Target verifyFormat => _ => _
-        .DependsOn(restore)
+        .DependsOn(restore, verifyCommitMessages)
         .Executes(() =>
         {
             DotNetBuild(s => s.SetProjectFile(_solution).SetConfiguration(Configuration.Debug));

@@ -139,6 +139,16 @@ since the last one uses `feat:`, `fix:`, or a breaking-change marker; a branch o
 `chore:`/`docs:`/non-conventional commits produces no release at all (`shouldPublishRelease`
 returns `false`), the same as real semantic-release. Write commits accordingly.
 
+`verifyCommitMessages` (a dependency of `verifyFormat`, so every target fails fast if it fails)
+enforces this: every commit message must start with a recognized Conventional Commits type
+(`feat`, `fix`, `build`, `chore`, `ci`, `docs`, `style`, `refactor`, `perf`, `test`, `revert`),
+optionally scoped (`fix(installer): ...`) and optionally marked breaking (`feat!: ...`) - not just
+the `feat:`/`fix:` ones that actually affect the version, since an unconventional message among
+those would otherwise silently contribute no version bump at all rather than being caught as the
+mistake it almost certainly is. Locally this only checks the one commit you just made (`HEAD~1`);
+in CI, on a push, it checks every commit in that push's range (via the event's `before` SHA) - it
+doesn't run for the schedule/manual-dispatch triggers, since those aren't tied to new commits.
+
 Every release is a GitHub prerelease by design; there's no automated "promote to stable" step.
 To promote a build so the Stable update channel (see `src/App.Updates/`) picks it up, open that
 release on GitHub and uncheck "Set as a pre-release" - the app's Stable channel reads
