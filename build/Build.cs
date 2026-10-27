@@ -189,9 +189,17 @@ internal class Build : FalloutBuild
     {
         var subjectLine = message.Split('\n')[0];
 
-        if (message.Contains("BREAKING CHANGE:", StringComparison.Ordinal)
-            || message.Contains("BREAKING-CHANGE:", StringComparison.Ordinal)
-            || Regex.IsMatch(subjectLine, @"^\w+(\([^)]*\))?!:"))
+        // A footer is its own paragraph (separated from the body by a blank line), per the spec -
+        // not just the phrase appearing anywhere, which would false-positive on a commit message
+        // that happens to mention "BREAKING CHANGE:" in passing (as this very check's own commit
+        // message once did, describing this exact rule).
+        var hasBreakingChangeFooter = message
+            .Split("\n\n", StringSplitOptions.RemoveEmptyEntries)
+            .Skip(1)
+            .Any(paragraph => paragraph.StartsWith("BREAKING CHANGE:", StringComparison.Ordinal)
+                || paragraph.StartsWith("BREAKING-CHANGE:", StringComparison.Ordinal));
+
+        if (hasBreakingChangeFooter || Regex.IsMatch(subjectLine, @"^\w+(\([^)]*\))?!:"))
         {
             return VersionBump.Major;
         }
