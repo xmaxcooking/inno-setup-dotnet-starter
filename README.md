@@ -112,7 +112,9 @@ configure. `global.json` pins the SDK version `actions/setup-dotnet` installs.
   gets cut from master by:
   - the **weekday train**: `release.yml`'s `OnCronSchedule` (`0 3 * * 1-5`, UTC - Monday through
     Friday, so 5 times a week, not weekends) builds and publishes whatever is on master's HEAD at
-    that time;
+    that time - but only if master's HEAD hasn't already been released (by an earlier train run or
+    a hotfix), so the train doesn't cut a no-op release re-tagging identical bits on a day with no
+    new commits;
   - a **manual dispatch**: run `release-manual.yml` from the Actions tab (or `gh workflow run
     release-manual.yml`) whenever a maintainer decides master is ready sooner than the next train.
 - **`hotfix/*` branches** release immediately on every push, no waiting for a train - branch off

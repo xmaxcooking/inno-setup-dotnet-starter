@@ -10,6 +10,7 @@ using Fallout.Solutions;
 using Octokit;
 using Serilog;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -86,13 +87,33 @@ internal class Build : FalloutBuild
         }
     }
 
-    // Only a plain push-to-master in CI should skip actually publishing - that's the one case
-    // that would otherwise fire on every commit. Everything else (a local run, a hotfix branch
-    // push, the weekday train, or a manual dispatch) is a deliberate "publish now" signal.
-    private bool shouldPublishRelease =>
-        GitHubActions.Instance is not { } gitHubActions
-        || gitHubActions.EventName != "push"
-        || gitHubActions.RefName != "master";
+    // A plain push-to-master should skip actually publishing - that's the one trigger that would
+    // otherwise fire on every commit. The weekday train (a schedule trigger) also skips it, but
+    // only when master's HEAD was already released by an earlier train or hotfix - otherwise the
+    // train would depart and cut a no-op release, re-tagging identical bits, every single weekday
+    // even without a single new commit. A hotfix branch push or a manual dispatch always publish.
+    private bool shouldPublishRelease
+    {
+        get
+        {
+            if (GitHubActions.Instance is not { } gitHubActions)
+            {
+                return true;
+            }
+
+            if (gitHubActions.EventName == "push")
+            {
+                return gitHubActions.RefName != "master";
+            }
+
+            if (gitHubActions.EventName == "schedule")
+            {
+                return existingReleases().All(release => release.TargetCommitish != gitHubActions.Sha);
+            }
+
+            return true;
+        }
+    }
 
     private string packageVersion => GitHubActions.Instance is { } gitHubActions
         ? $"1.0.{gitHubActions.RunNumber}.0"
@@ -101,11 +122,13 @@ internal class Build : FalloutBuild
     private string gitHubOwner => _gitRepository.GetGitHubOwner();
     private string gitHubRepoName => _gitRepository.GetGitHubName();
 
-    private string computeReleaseTag()
+    private IReadOnlyList<Release> _existingReleases;
+
+    private IReadOnlyList<Release> existingReleases()
     {
-        if (GitHubActions.Instance is not { } gitHubActions)
+        if (_existingReleases is not null)
         {
-            return SemanticVersion.Format(VersionMajor, VersionMinor, 0);
+            return _existingReleases;
         }
 
         if (_gitHubToken is { } token)
@@ -113,14 +136,25 @@ internal class Build : FalloutBuild
             GitHubTasks.GitHubClient.Credentials = new Credentials(token);
         }
 
-        var prefix = $"v{VersionMajor}.{VersionMinor}.";
-        var releases = GitHubTasks.GitHubClient.Repository.Release
+        _existingReleases = GitHubTasks.GitHubClient.Repository.Release
             .GetAll(gitHubOwner, gitHubRepoName, new ApiOptions { PageSize = 100 })
             .GetAwaiter()
             .GetResult();
 
+        return _existingReleases;
+    }
+
+    private string computeReleaseTag()
+    {
+        if (GitHubActions.Instance is null)
+        {
+            return SemanticVersion.Format(VersionMajor, VersionMinor, 0);
+        }
+
+        var prefix = $"v{VersionMajor}.{VersionMinor}.";
+
         var highestExistingPatch = -1;
-        foreach (var release in releases)
+        foreach (var release in existingReleases())
         {
             if (!release.TagName.StartsWith(prefix, StringComparison.Ordinal))
             {
