@@ -11,6 +11,7 @@ public sealed class FakeDbContext : IAppDbContext
         new(3, "Mia Rossi", "mia.rossi@example.com", "Italy", new DateOnly(2024, 1, 21)),
         new(4, "Noah Dubois", "noah.dubois@example.com", "France", new DateOnly(2024, 5, 9)),
         new(5, "Emma Keller", "emma.keller@example.com", "Austria", new DateOnly(2024, 11, 30)),
-        new(6, "Lucas Silva", "lucas.silva@example.com", "Brazil", new DateOnly(2025, 2, 15))
+        new(6, "Lucas Silva", "lucas.silva@example.com", "Brazil", new DateOnly(2025, 2, 15)),
+        new(7, "Sofia Jensen", "sofia.jensen@example.com", "Denmark", new DateOnly(2025, 9, 4))
     }.AsQueryable();
 }
