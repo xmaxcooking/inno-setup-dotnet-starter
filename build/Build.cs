@@ -16,19 +16,45 @@ using static Fallout.Common.EnvironmentInfo;
 using static Fallout.Common.Tools.DotNet.DotNetTasks;
 
 // [GitHubActions] generates .github/workflows/release.yml from the attribute below; never hand-edit the .yml.
+//
+// master pushes and hotfix/** pushes both run this workflow, but only hotfix pushes (and the
+// daily/manual train below) actually publish a release - a plain master push only builds and
+// tests, so pushing to master repeatedly during a day doesn't spam users with update prompts.
+// See shouldPublishRelease.
 [GitHubActions(
     "release",
     GitHubActionsImage.WindowsLatest,
-    OnPushBranches = new[] { "master" },
+    OnPushBranches = new[] { "master", "hotfix/**" },
+    OnCronSchedule = "0 3 * * *",
     InvokedTargets = new[] { nameof(publishRelease) },
     EnableGitHubToken = true,
     WritePermissions = new[] { GitHubActionsPermissions.Contents },
     PublishArtifacts = false,
-    ConcurrencyGroup = "release",
+    ConcurrencyGroup = "release-${{ github.ref }}",
+    ConcurrencyCancelInProgress = false)]
+// A separate workflow file for the manual-dispatch trigger - Fallout doesn't allow mixing the
+// On*-style detailed triggers above (push/cron) with the shorthand On trigger list in one
+// [GitHubActions] attribute, so this is a second, minimal workflow that invokes the same target.
+[GitHubActions(
+    "release-manual",
+    GitHubActionsImage.WindowsLatest,
+    On = new[] { GitHubActionsTrigger.WorkflowDispatch },
+    InvokedTargets = new[] { nameof(publishRelease) },
+    EnableGitHubToken = true,
+    WritePermissions = new[] { GitHubActionsPermissions.Contents },
+    PublishArtifacts = false,
+    ConcurrencyGroup = "release-${{ github.ref }}",
     ConcurrencyCancelInProgress = false)]
 internal class Build : FalloutBuild
 {
     public static int Main() => Execute<Build>(x => x.test);
+
+    // Bump Major for a breaking change, Minor for a new feature - commit the change on master
+    // and the next train (or a manual dispatch) picks it up. A hotfix branch keeps whatever was
+    // committed here at the tag it was cut from, so it keeps extending that older line's patch
+    // sequence independently of whatever master has moved on to.
+    private const int VersionMajor = 1;
+    private const int VersionMinor = 0;
 
     [Parameter("Whether this build is a prerelease - Default is true", Name = "IsPrereleaseBuild")]
     private readonly bool _isPrereleaseBuild = true;
@@ -48,7 +74,24 @@ internal class Build : FalloutBuild
     private AbsolutePath toolPublishDirectory => RootDirectory / "artifacts" / "publish" / "App.Installer.Tool";
     private AbsolutePath setupScript => RootDirectory / "installer" / "Setup.iss";
 
-    private string releaseTag => SemanticVersion.Format(GitHubActions.Instance?.RunNumber ?? 0);
+    private Lazy<string> _releaseTag;
+
+    private string releaseTag
+    {
+        get
+        {
+            _releaseTag ??= new Lazy<string>(computeReleaseTag);
+            return _releaseTag.Value;
+        }
+    }
+
+    // Only a plain push-to-master in CI should skip actually publishing - that's the one case
+    // that would otherwise fire on every commit. Everything else (a local run, a hotfix branch
+    // push, the daily train, or a manual dispatch) is a deliberate "publish now" signal.
+    private bool shouldPublishRelease =>
+        GitHubActions.Instance is not { } gitHubActions
+        || gitHubActions.EventName != "push"
+        || gitHubActions.RefName != "master";
 
     private string packageVersion => GitHubActions.Instance is { } gitHubActions
         ? $"1.0.{gitHubActions.RunNumber}.0"
@@ -56,6 +99,41 @@ internal class Build : FalloutBuild
 
     private string gitHubOwner => _gitRepository.GetGitHubOwner();
     private string gitHubRepoName => _gitRepository.GetGitHubName();
+
+    private string computeReleaseTag()
+    {
+        if (GitHubActions.Instance is not { } gitHubActions)
+        {
+            return SemanticVersion.Format(VersionMajor, VersionMinor, 0);
+        }
+
+        if (_gitHubToken is { } token)
+        {
+            GitHubTasks.GitHubClient.Credentials = new Credentials(token);
+        }
+
+        var prefix = $"v{VersionMajor}.{VersionMinor}.";
+        var releases = GitHubTasks.GitHubClient.Repository.Release
+            .GetAll(gitHubOwner, gitHubRepoName, new ApiOptions { PageSize = 100 })
+            .GetAwaiter()
+            .GetResult();
+
+        var highestExistingPatch = -1;
+        foreach (var release in releases)
+        {
+            if (!release.TagName.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (int.TryParse(release.TagName.AsSpan(prefix.Length), out var patch) && patch > highestExistingPatch)
+            {
+                highestExistingPatch = patch;
+            }
+        }
+
+        return SemanticVersion.Format(VersionMajor, VersionMinor, highestExistingPatch + 1);
+    }
 
     private Target clean => _ => _
         .Before(restore)
@@ -165,6 +243,12 @@ internal class Build : FalloutBuild
         .Requires(() => _gitHubToken)
         .Executes(async () =>
         {
+            if (!shouldPublishRelease)
+            {
+                Console.WriteLine("Plain push to master - build and tests passed, but skipping the actual release so master pushes don't spam users with update prompts.");
+                return;
+            }
+
             GitHubTasks.GitHubClient.Credentials = new Credentials(_gitHubToken);
 
             var tag = releaseTag;

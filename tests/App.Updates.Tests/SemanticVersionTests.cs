@@ -46,8 +46,8 @@ public class SemanticVersionTests
     [TestMethod]
     public void Format_RoundTripsThroughParse()
     {
-        var tag = SemanticVersion.Format(7);
+        var tag = SemanticVersion.Format(2, 3, 7);
 
-        Assert.AreEqual(new Version(1, 0, 7), SemanticVersion.Parse(tag));
+        Assert.AreEqual(new Version(2, 3, 7), SemanticVersion.Parse(tag));
     }
 }

@@ -96,16 +96,35 @@ C# method.
 `PackInstaller (Release)` variant, ...), so you can run/debug any of them from an IDE's run
 configuration dropdown instead of the command line.
 
-## CI: release on push to master
+## CI: release trains, plus hotfix branches
 
-`.github/workflows/release.yml` is generated from the `[GitHubActions]` attribute on `Build` in
-`build/Build.cs` - don't hand-edit the `.yml`; change the attribute and run the build once to
-regenerate it. On every push to `master` it runs `publishRelease` (which depends on
-`packInstaller`) on `windows-latest`, creating a GitHub Release tagged `v1.0.<run number>`
-(`src/App.Updates/Feed/SemanticVersion.cs`) - always unique, no collisions across re-runs -
-marked as a prerelease, with `AppClientWindowsSample-Setup.exe` attached.
-Auth is `GITHUB_TOKEN`, provided automatically by Actions; no secrets to configure. `global.json`
-pins the SDK version `actions/setup-dotnet` installs.
+`.github/workflows/release.yml` and `release-manual.yml` are both generated from the two
+`[GitHubActions]` attributes on `Build` in `build/Build.cs` - don't hand-edit the `.yml` files;
+change the attributes and run the build once to regenerate them (two files because Fallout
+doesn't allow mixing the shorthand `On` trigger list with the detailed `On*` properties in one
+attribute). Both ultimately run `publishRelease` (which depends on `packInstaller`) on
+`windows-latest`. Auth is `GITHUB_TOKEN`, provided automatically by Actions; no secrets to
+configure. `global.json` pins the SDK version `actions/setup-dotnet` installs.
+
+- **`master`** is the rolling "latest" line. Every push to it builds and tests, but does *not*
+  publish a release on its own (`shouldPublishRelease` in `Build.cs`) - otherwise every commit to
+  master would prompt every installed app to update, which gets old fast. A release only actually
+  gets cut from master by:
+  - the **daily train**: `release.yml`'s `OnCronSchedule` (`0 3 * * *`, UTC) builds and publishes
+    whatever is on master's HEAD at that time;
+  - a **manual dispatch**: run `release-manual.yml` from the Actions tab (or `gh workflow run
+    release-manual.yml`) whenever a maintainer decides master is ready sooner than the next train.
+- **`hotfix/*` branches** release immediately on every push, no waiting for a train - branch off
+  an existing release's tag (e.g. `git checkout -b hotfix/1.0 v1.0.12`), cherry-pick the fix, push.
+- The release tag is computed by `computeReleaseTag()` in `Build.cs`: `VersionMajor`/`VersionMinor`
+  are plain constants in that file - bump them manually (breaking change → Major, new feature →
+  Minor) and commit the change on whichever branch needs it. `PATCH` is *not* a global counter -
+  it's looked up by querying GitHub for the highest existing release tag matching that exact
+  `v{Major}.{Minor}.*` and adding one. This is what makes hotfix branches work correctly: a
+  `hotfix/1.0` branch keeps whatever `Major`/`Minor` were committed at the tag it was cut from, so
+  it continues *that* line's patch sequence independently of whatever master's `Major`/`Minor` has
+  moved on to since - `v1.0.12` plus a hotfix becomes `v1.0.13`, even if master is already shipping
+  `v1.1.*`.
 
 Every release is a GitHub prerelease by design; there's no automated "promote to stable" step.
 To promote a build so the Stable update channel (see `src/App.Updates/`) picks it up, open that

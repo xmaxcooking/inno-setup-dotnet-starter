@@ -2,7 +2,7 @@ namespace App.Updates.Feed;
 
 public static class SemanticVersion
 {
-    public static string Format(long runNumber) => $"v1.0.{runNumber}";
+    public static string Format(int major, int minor, int patch) => $"v{major}.{minor}.{patch}";
 
     // Build metadata (the part after '+', including the SDK's auto-appended git commit sha -
     // see Build.cs) is explicitly excluded from version precedence by the SemVer spec, so it's
