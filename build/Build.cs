@@ -72,7 +72,7 @@ internal class Build : FalloutBuild
     // and the next train (or a manual dispatch) picks it up. A hotfix branch keeps whatever was
     // committed here at the tag it was cut from, so it keeps extending that older line's patch
     // sequence independently of whatever master has moved on to.
-    private const int VersionMajor = 1;
+    private const int VersionMajor = 0;
     private const int VersionMinor = 0;
 
     // A version below 1.0.0 has made no compatibility promise yet, so it's automatically a
