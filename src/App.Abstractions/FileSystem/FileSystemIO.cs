@@ -1,6 +1,6 @@
 namespace App.Abstractions.FileSystem;
 
-internal sealed class FileSystemIO : IFileSystem
+public sealed class FileSystemIO : IFileSystem
 {
     public bool FileExists(string path) => File.Exists(path);
     public string ReadAllText(string path) => File.ReadAllText(path);

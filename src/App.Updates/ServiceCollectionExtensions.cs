@@ -9,12 +9,12 @@ using System.Reflection;
 
 namespace App.Updates;
 
-internal static class ServiceCollectionExtensions
+public static class ServiceCollectionExtensions
 {
     private const string GitHubOwnerMetadataKey = "GitHubOwner";
     private const string GitHubRepoMetadataKey = "GitHubRepo";
 
-    internal static IServiceCollection AddUpdates(this IServiceCollection services)
+    public static IServiceCollection AddUpdates(this IServiceCollection services)
     {
         services.AddSingleton<IFileSystem, FileSystemIO>();
         services.AddSingleton<IClientIdentity, ClientIdentity>();

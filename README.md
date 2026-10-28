@@ -14,11 +14,12 @@ assets/            icon/logo/license assets used by the installer
 src/
   App.Domain/      class library - the "Customer" domain model
   App.Abstractions/ class library - cross-cutting interfaces (IFileSystem, IProcessLauncher,
-                    ISystemDateTime) - internal, implementation detail behind App.Core.Api
+                    ISystemDateTime) - implementation detail behind App.Core.Api by convention,
+                    not enforced by the compiler (see "App.Core.Api" below)
   App.Infrastructure/ class library - data access abstraction (IAppDbContext) + concrete data
-                    access (FakeDbContext, in-memory sample data) - internal, same reason
-  App.Updates/      class library - update-check feed, settings, and client identity - internal
-                    except for the plain data types (UpdateInfo, UpdateChannel, SemanticVersion)
+                    access (FakeDbContext, in-memory sample data) - same convention
+  App.Updates/      class library - update-check feed, settings, and client identity - same
+                    convention
   App.Core.Api/     class library - the app's real public surface. App.Client.Windows and
                     App.Installer.Tool are only allowed to reference this, not the three projects
                     above directly - see "App.Core.Api: the app's real public surface" below
@@ -41,31 +42,37 @@ build/
 
 ## `App.Core.Api`: the app's real public surface
 
-`App.Domain`, `App.Infrastructure`, `App.Abstractions`, and all but three types in `App.Updates`
-are `internal` - not just "not referenced," but genuinely inaccessible outside their own assembly.
-`App.Core.Api` is the one project granted friend access (`[assembly: InternalsVisibleTo(...)]` in
-each project's `AssemblyInfo.cs`) and the one project `App.Client.Windows` and
-`App.Installer.Tool` are allowed to reference - both only ever call `services.AddCoreApi()` and
-resolve `ICustomerDirectory`/`IUpdateService`/`IUpdateChannelSettings` from DI, never anything from
-the three internal projects directly.
+`App.Client.Windows` and `App.Installer.Tool` only ever reference `App.Core.Api` - never
+`App.Domain`/`App.Infrastructure`/`App.Updates`/`App.Abstractions` directly. Both call
+`services.AddCoreApi()` and resolve `ICustomerDirectory`/`IUpdateService`/`IUpdateChannelSettings`
+from DI, never anything from the four underlying projects by name.
 
-This isn't automated or enforced by a build check - omitting a `<ProjectReference>` alone wouldn't
-actually stop a consumer from reaching the internal projects' types, since .NET project references
-are transitively visible for compilation by default. `internal` + `InternalsVisibleTo` is what
-makes the boundary real, not just a convention. The payoff: a diff that only touches
-`App.Infrastructure`/`App.Updates`/`App.Abstractions` is, by construction, invisible to both real
-consumers - internal-only, never breaking for them. A diff that touches `App.Core.Api`'s own
-public interfaces is the one case actually worth asking "does this need a `VersionMajor` bump,"
-since that's the one surface anything outside this solution could ever depend on.
+This is a convention, not a compiler-enforced boundary - deliberately. `internal` +
+`[assembly: InternalsVisibleTo(...)]` could enforce it (and was tried during this project's
+history), but using `InternalsVisibleTo` to grant one specific *project* friend access to several
+others, purely to simulate a module boundary .NET doesn't have natively, creates its own problems:
+bare strings with no compile-time checking, and assemblies that export zero public types and so
+look broken when opened in isolation. `InternalsVisibleTo` is still used here, just for its normal,
+narrow job - granting each project's own test project access to its concrete implementation types
+that only that project and its tests ever construct directly (`FakeDbContext`,
+`GitHubReleaseUpdateFeed`, `ClientIdentity`, `UpdateSettings`, `AssemblyMetadataDefaultUpdateChannel`).
+Everything `App.Core.Api` itself needs to reference - `IAppDbContext`, `UpdateCheck`, `IUpdateFeed`,
+`IClientIdentity`, `IUpdateSettingsStore`, each project's `ServiceCollectionExtensions` - stays
+`public`, same as any other normal multi-project .NET solution; "go through `App.Core.Api`" is
+enforced by code review, the same way most architectural conventions are.
 
-If you extend this template with a second, independent consumer of `App.Core.Api` (e.g. a
-published NuGet package, or a UI that isn't rebuilt from the same solution every time), consider
-adding an automated API-compatibility check (e.g. `Microsoft.DotNet.ApiCompat`) on top of this
-boundary - that's the point where a forgotten `VersionMajor` bump stops being something a reviewer
-would always catch by eye and starts being something a published consumer could actually get
-silently broken by. For two consumers that are always rebuilt together in the same solution (the
-case today), the C# compiler already catches that for you on every build, so it wouldn't add real
-protection yet.
+The payoff of the convention alone: a diff that only touches `App.Infrastructure`/`App.Updates`/
+`App.Abstractions` is easy to recognize as internal-only by a reviewer, and a diff that touches
+`App.Core.Api`'s own three interfaces is the one case actually worth asking "does this need a
+`VersionMajor` bump" - without needing the compiler to prove it. If you extend this template with a
+genuinely independent consumer of `App.Core.Api` (e.g. a published NuGet package, or a UI that
+isn't rebuilt from the same solution every time), that's the point where relying on review stops
+being enough and an automated API-compatibility check (e.g. `Microsoft.DotNet.ApiCompat`) would
+earn its keep - a forgotten `VersionMajor` bump stops being something a reviewer would always catch
+by eye and starts being something a published consumer could silently get broken by. For two
+consumers that are always rebuilt together in the same solution (the case today), the C# compiler
+already catches that on every build, so neither `InternalsVisibleTo`-as-enforcement nor ApiCompat
+would add real protection yet.
 
 ## Prerequisites
 
@@ -262,8 +269,9 @@ which can't represent those characters.
 - `App.Domain` is the seam for real domain models; `App.Infrastructure` holds both the data
   access abstraction (`IAppDbContext`) and its real implementation (e.g. a real EF Core
   `DbContext` in place of `FakeDbContext`) - `IAppDbContext` mirrors EF Core's own `DbContext`
-  shape, so it's a persistence concern, not a domain one. Both are `internal`, reached only
-  through `App.Core.Api`'s `ICustomerDirectory` - swapping `FakeDbContext` for a real one needs no
-  change to `App.Core.Api` or either consumer, since `IAppDbContext` itself doesn't change shape.
+  shape, so it's a persistence concern, not a domain one. `App.Core.Api` only ever depends on
+  `IAppDbContext` (public); `FakeDbContext` itself is `internal` (visible only to
+  `App.Infrastructure.Tests`, which constructs it directly) - swapping it for a real
+  implementation needs no change to `App.Core.Api` or either consumer.
 - `assets/logo.bmp` must stay a `.bmp` - Inno Setup's wizard image attributes don't accept PNG.
   `assets/License.txt` is plain text (Inno doesn't require RTF, unlike WiX's WixUI).

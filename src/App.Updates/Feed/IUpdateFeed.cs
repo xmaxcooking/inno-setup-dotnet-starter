@@ -1,6 +1,6 @@
 namespace App.Updates.Feed;
 
-internal interface IUpdateFeed
+public interface IUpdateFeed
 {
     Task<UpdateInfo?> TryGetLatestIfNewerAsync(string currentVersion, string clientId, CancellationToken cancellationToken = default);
 }

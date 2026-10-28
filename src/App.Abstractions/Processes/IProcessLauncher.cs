@@ -1,6 +1,6 @@
 namespace App.Abstractions.Processes;
 
-internal interface IProcessLauncher
+public interface IProcessLauncher
 {
     void Start(string path);
 }

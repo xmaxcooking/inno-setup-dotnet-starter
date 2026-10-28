@@ -9,7 +9,7 @@ using System.Text.Json;
 
 namespace App.Updates;
 
-internal sealed class UpdateCheck
+public sealed class UpdateCheck
 {
     private static readonly TimeSpan _checkInterval = TimeSpan.FromHours(1);
     private static readonly TimeSpan _overallTimeout = TimeSpan.FromSeconds(20);
