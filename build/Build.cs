@@ -157,12 +157,18 @@ internal class Build : FalloutBuild
 
         var prefix = $"v{VersionMajor}.{VersionMinor}.";
 
+        // 0.0.0 is the conventional npm/semver sentinel for "nothing has actually been published
+        // yet," not a real release - so the very first release of the pre-1.0 line starts at
+        // patch 1 instead. Every other line (1.0.0, 1.1.0, 2.0.0, ...) starts at patch 0 as
+        // usual - that's the normal, expected way to start a new major/minor per semver.
+        var firstPatch = VersionMajor == 0 && VersionMinor == 0 ? 1 : 0;
+
         var nextPatch = existingReleases()
             .Select(r => r.TagName)
             .Where(tag => tag.StartsWith(prefix, StringComparison.Ordinal))
             .Select(tag => int.TryParse(tag[prefix.Length..], out var patch) ? patch : -1)
             .Where(patch => patch >= 0)
-            .DefaultIfEmpty(-1)
+            .DefaultIfEmpty(firstPatch - 1)
             .Max() + 1;
 
         return $"{prefix}{nextPatch}";
