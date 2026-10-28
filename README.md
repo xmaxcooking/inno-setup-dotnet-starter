@@ -180,12 +180,37 @@ cut from `v1.0.12` has `VersionMajor`/`VersionMinor` = `1`/`0` baked into its ow
 construction (that's whatever was committed at the tag it was cut from), so it naturally keeps
 extending `v1.0.*`'s patch sequence independently of whatever master's constants have moved on to.
 
-Every release is a GitHub prerelease by design; there's no automated "promote to stable" step.
-To promote a build so the Stable update channel (see `src/App.Updates/`) picks it up, open that
-release on GitHub and uncheck "Set as a pre-release" - the app's Stable channel reads
-`GET /releases/latest`, which only ever returns the most recent *non-prerelease* release. The
-Beta channel instead fetches a page of recent releases and picks the highest version among them -
-the list endpoint's order isn't reliably newest-first in practice, so position 0 can't be trusted.
+A release is automatically a GitHub prerelease only while `VersionMajor` is `0` - no compatibility
+promise has been made yet, so there's nothing to manually flag. Once `VersionMajor` reaches `1`,
+every release (train, hotfix, or manual) publishes as a normal, non-prerelease release; there's no
+manual "promote to stable" step at all (`isPrereleaseBuild` in `Build.cs`).
+
+## Update channels: Stable and Current
+
+`src/App.Updates/Feed/GitHubReleaseUpdateFeed.cs` serves two channels (`UpdateChannel`), both
+built from the same full releases list (fetched once, `GET /releases?per_page=100` - the list
+endpoint's order isn't reliably newest-first in practice, so position 0 can't be trusted; every
+candidate is compared by its parsed version instead):
+
+- **Current** always takes the single highest version found anywhere, Major included - no
+  restriction at all.
+- **Stable** never reaches the single newest major that exists. Its ceiling is
+  `max(client's own major, highest major anywhere - 1)` - it climbs toward "one behind the
+  bleeding edge," and once there (or already past it on its own major), keeps taking Minor/Patch
+  updates within that major, but never the newest major itself. A client doesn't need to ever
+  switch to Current to eventually receive a new major - the ceiling itself climbs to include it
+  once a *further* major ships (e.g. a client stuck on Stable's ceiling major 4 reaches major 5
+  automatically once major 6 exists, pulling the ceiling to 5), so switching channels is a matter
+  of impatience, not necessity.
+
+Both channels see hotfix releases (a patch on an older line, published after master's moved on)
+as ordinary candidates - nothing excludes them; they just don't win the comparison if something
+higher is also available.
+
+When Stable holds back a newer major, `UpdateCheckResult.NewerMajorVersion` carries its version
+string as a passive notice (`MainWindow`'s `InfoBar`) - never an install prompt, and the wording
+deliberately doesn't suggest switching channels, since (per above) nothing is actually required to
+eventually receive it.
 
 ## Why Inno Setup instead of WiX?
 

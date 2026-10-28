@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using System.Reflection;
 
 namespace App.Client.Windows;
 
@@ -47,8 +48,14 @@ public partial class App : Application
     private async Task checkForUpdatesAsync(ServiceProvider provider)
     {
         var updateService = provider.GetRequiredService<IUpdateService>();
-        var update = await updateService.CheckForUpdateAsync();
-        if (update is null)
+        var result = await updateService.CheckForUpdateAsync();
+
+        if (result.NewerMajorVersion is { } newerMajorVersion)
+        {
+            _mainWindow!.ShowNewerMajorVersionNotice(newerMajorVersion);
+        }
+
+        if (result.Update is not { } update)
         {
             return;
         }
@@ -109,10 +116,13 @@ public partial class App : Application
 
     private async Task<bool> showUpdateDialogAsync(UpdateInfo update)
     {
+        var currentVersion = Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
+
         var dialog = new ContentDialog
         {
             Title = "Update available",
-            Content = $"Version {update.Version} is available. Install it now?",
+            Content = $"Version {update.Version} is available (you have {currentVersion}). Install it now?",
             PrimaryButtonText = "Update now",
             CloseButtonText = "Later",
             DefaultButton = ContentDialogButton.Primary,

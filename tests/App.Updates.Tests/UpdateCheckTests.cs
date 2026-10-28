@@ -14,12 +14,12 @@ public class UpdateCheckTests
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
         fileSystem.SeedExistingFile(seedState(runningVersion(), now.AddMinutes(-10)));
-        var feed = new FakeUpdateFeed(null);
+        var feed = new FakeUpdateFeed(UpdateCheckResult.None);
         var check = createUpdateCheck(feed, fileSystem, now);
 
         var result = await check.CheckAsync();
 
-        Assert.IsNull(result);
+        Assert.IsNull(result.Update);
         Assert.IsFalse(feed.WasCalled);
         Assert.IsNull(fileSystem.WrittenContent);
     }
@@ -30,12 +30,12 @@ public class UpdateCheckTests
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
         fileSystem.SeedExistingFile(seedState(runningVersion(), now.AddHours(-2)));
-        var feed = new FakeUpdateFeed(null);
+        var feed = new FakeUpdateFeed(UpdateCheckResult.None);
         var check = createUpdateCheck(feed, fileSystem, now);
 
         var result = await check.CheckAsync();
 
-        Assert.IsNull(result);
+        Assert.IsNull(result.Update);
         Assert.IsTrue(feed.WasCalled);
         Assert.AreEqual("the-client-id", feed.ReceivedClientId);
         assertWrittenState(fileSystem, runningVersion(), now);
@@ -47,12 +47,12 @@ public class UpdateCheckTests
     {
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
-        var feed = new FakeUpdateFeed(null);
+        var feed = new FakeUpdateFeed(UpdateCheckResult.None);
         var check = createUpdateCheck(feed, fileSystem, now);
 
         var result = await check.CheckAsync();
 
-        Assert.IsNull(result);
+        Assert.IsNull(result.Update);
         Assert.IsTrue(feed.WasCalled);
     }
 
@@ -62,12 +62,12 @@ public class UpdateCheckTests
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
         fileSystem.SeedExistingFile("not-a-timestamp");
-        var feed = new FakeUpdateFeed(null);
+        var feed = new FakeUpdateFeed(UpdateCheckResult.None);
         var check = createUpdateCheck(feed, fileSystem, now);
 
         var result = await check.CheckAsync();
 
-        Assert.IsNull(result);
+        Assert.IsNull(result.Update);
         Assert.IsTrue(feed.WasCalled);
     }
 
@@ -77,12 +77,12 @@ public class UpdateCheckTests
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
         fileSystem.SeedExistingFile(seedState("v1.0.99", now.AddMinutes(-10)));
-        var feed = new FakeUpdateFeed(null);
+        var feed = new FakeUpdateFeed(UpdateCheckResult.None);
         var check = createUpdateCheck(feed, fileSystem, now);
 
         var result = await check.CheckAsync();
 
-        Assert.IsNull(result);
+        Assert.IsNull(result.Update);
         Assert.IsTrue(feed.WasCalled);
     }
 
@@ -97,7 +97,7 @@ public class UpdateCheckTests
 
         var result = await check.CheckAsync();
 
-        Assert.IsNull(result);
+        Assert.IsNull(result.Update);
     }
 
     [TestMethod]
@@ -106,13 +106,13 @@ public class UpdateCheckTests
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
         var update = new UpdateInfo("v1.0.99", "https://example.com/installer.exe");
-        var feed = new FakeUpdateFeed(update);
+        var feed = new FakeUpdateFeed(new UpdateCheckResult(update, null));
         var processLauncher = new FakeProcessLauncher();
         var check = createUpdateCheck(feed, fileSystem, now, processLauncher: processLauncher);
 
         var result = await check.CheckAsync();
 
-        Assert.AreSame(update, result);
+        Assert.AreSame(update, result.Update);
         Assert.AreEqual(0, fileSystem.CreatedFilePaths.Count);
         Assert.AreEqual(0, processLauncher.StartedPaths.Count);
         assertWrittenState(fileSystem, runningVersion(), now);
@@ -124,7 +124,7 @@ public class UpdateCheckTests
         var now = DateTimeOffset.UtcNow;
         var fileSystem = new FakeFileSystem();
         var update = new UpdateInfo("v1.0.99", "https://example.com/installer.exe");
-        var feed = new FakeUpdateFeed(update);
+        var feed = new FakeUpdateFeed(new UpdateCheckResult(update, null));
         var handler = new StubHttpMessageHandler("installer-bytes");
         var httpClient = new HttpClient(handler);
         var httpClientFactory = new FakeHttpClientFactory(httpClient);

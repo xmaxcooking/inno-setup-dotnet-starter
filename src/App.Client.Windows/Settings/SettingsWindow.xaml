@@ -30,7 +30,7 @@
 
                     <StackPanel Spacing="8">
                         <RadioButton x:Name="StableRadioButton" Content="Stable" GroupName="Channel" IsChecked="True" />
-                        <RadioButton x:Name="BetaRadioButton" Content="Beta" GroupName="Channel" />
+                        <RadioButton x:Name="CurrentRadioButton" Content="Current" GroupName="Channel" />
                         <TextBlock
                             Text="Takes effect on next launch - the update check only runs at startup."
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"

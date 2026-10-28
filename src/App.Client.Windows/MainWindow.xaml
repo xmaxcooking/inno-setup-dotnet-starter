@@ -22,22 +22,30 @@
             </MenuBarItem>
         </MenuBar>
 
-        <Grid Grid.Row="1" Padding="24" RowDefinitions="Auto,Auto,*">
+        <Grid Grid.Row="1" Padding="24" RowDefinitions="Auto,Auto,Auto,*">
+
+            <InfoBar
+                Grid.Row="0"
+                x:Name="NewerMajorNotice"
+                Severity="Informational"
+                IsOpen="False"
+                Title="A new major version is available"
+                Margin="0,0,0,16" />
 
             <TextBlock
-                Grid.Row="0"
+                Grid.Row="1"
                 Text="Sample Customers"
                 Style="{StaticResource TitleTextBlockStyle}" />
 
             <TextBlock
-                Grid.Row="1"
+                Grid.Row="2"
                 x:Name="CustomerCountText"
                 Style="{StaticResource CaptionTextBlockStyle}"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                 Margin="0,4,0,16" />
 
             <Border
-                Grid.Row="2"
+                Grid.Row="3"
                 CornerRadius="8"
                 BorderThickness="1"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"

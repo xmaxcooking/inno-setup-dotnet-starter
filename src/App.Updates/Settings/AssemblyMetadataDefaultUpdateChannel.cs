@@ -13,7 +13,7 @@ internal sealed class AssemblyMetadataDefaultUpdateChannel : IDefaultUpdateChann
         {
             var metadata = Assembly.GetEntryAssembly()?.GetCustomAttributes<AssemblyMetadataAttribute>();
             var isPrereleaseBuild = metadata?.FirstOrDefault(m => m.Key == IsPrereleaseBuildMetadataKey)?.Value;
-            return string.Equals(isPrereleaseBuild, "true", StringComparison.OrdinalIgnoreCase) ? UpdateChannel.Beta : UpdateChannel.Stable;
+            return string.Equals(isPrereleaseBuild, "true", StringComparison.OrdinalIgnoreCase) ? UpdateChannel.Current : UpdateChannel.Stable;
         }
     }
 }

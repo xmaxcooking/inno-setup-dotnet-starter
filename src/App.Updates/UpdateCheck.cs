@@ -36,7 +36,7 @@ public sealed class UpdateCheck
         _logger = logger;
     }
 
-    public async Task<UpdateInfo?> CheckAsync()
+    public async Task<UpdateCheckResult> CheckAsync()
     {
         try
         {
@@ -46,21 +46,21 @@ public sealed class UpdateCheck
             if (!isDue(currentVersion))
             {
                 _logger.LogDebug("Update check skipped; not due yet.");
-                return null;
+                return UpdateCheckResult.None;
             }
 
             using var cts = new CancellationTokenSource(_overallTimeout);
 
-            var update = await _feed.TryGetLatestIfNewerAsync(currentVersion, _clientIdentity.GetOrCreate(), cts.Token);
+            var result = await _feed.TryGetLatestIfNewerAsync(currentVersion, _clientIdentity.GetOrCreate(), cts.Token);
 
             recordChecked(currentVersion);
 
-            return update;
+            return result;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Update check failed; continuing to start normally.");
-            return null;
+            return UpdateCheckResult.None;
         }
     }
 

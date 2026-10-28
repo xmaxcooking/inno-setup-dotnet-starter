@@ -53,9 +53,6 @@ internal class Build : FalloutBuild
 {
     public static int Main() => Execute<Build>(x => x.test);
 
-    [Parameter("Whether this build is a prerelease - Default is true", Name = "IsPrereleaseBuild")]
-    private readonly bool _isPrereleaseBuild = true;
-
     [Parameter("Configuration to build - Default is 'Debug' (local) or 'Release' (server)", Name = "Configuration")]
     private readonly Configuration _configuration = IsLocalBuild ? Configuration.Debug : Configuration.Release;
 
@@ -77,6 +74,11 @@ internal class Build : FalloutBuild
     // sequence independently of whatever master has moved on to.
     private const int VersionMajor = 1;
     private const int VersionMinor = 0;
+
+    // A version below 1.0.0 has made no compatibility promise yet, so it's automatically a
+    // GitHub prerelease - not a manual per-build decision like it used to be, since that was
+    // just as forgettable as any other "remember to flag this" rule.
+    private bool isPrereleaseBuild => VersionMajor < 1;
 
     private Lazy<string> _releaseTagLazy;
 
@@ -223,7 +225,7 @@ internal class Build : FalloutBuild
                 .SetProperty("Company", "Your Company")
                 .SetProperty("Product", "App.Client.Windows Sample")
                 .SetProperty("AssemblyTitle", "App.Client.Windows Sample")
-                .SetProperty("InnoSetupDotnetStarterIsPrereleaseBuild", _isPrereleaseBuild ? "true" : "false"));
+                .SetProperty("InnoSetupDotnetStarterIsPrereleaseBuild", isPrereleaseBuild ? "true" : "false"));
 
             DotNetPublish(s => s
                 .SetProject(RootDirectory / "installer" / "App.Installer.Tool" / "App.Installer.Tool.csproj")
@@ -293,7 +295,7 @@ internal class Build : FalloutBuild
                 {
                     Name = tag,
                     TargetCommitish = GitHubActions.Instance.Sha,
-                    Prerelease = _isPrereleaseBuild,
+                    Prerelease = isPrereleaseBuild,
                     Body = $"Automated build from commit {GitHubActions.Instance.Sha}."
                 });
 

@@ -27,13 +27,13 @@ public sealed partial class SettingsWindow : Window
             presenter.PreferredMinimumHeight = 360;
         }
 
-        BetaRadioButton.IsChecked = updateSettings.GetChannel() == UpdateChannel.Beta;
-        StableRadioButton.IsChecked = !(BetaRadioButton.IsChecked == true);
+        CurrentRadioButton.IsChecked = updateSettings.GetChannel() == UpdateChannel.Current;
+        StableRadioButton.IsChecked = !(CurrentRadioButton.IsChecked == true);
     }
 
     private void okButtonClick(object sender, RoutedEventArgs e)
     {
-        _updateSettings.SetChannel(BetaRadioButton.IsChecked == true ? UpdateChannel.Beta : UpdateChannel.Stable);
+        _updateSettings.SetChannel(CurrentRadioButton.IsChecked == true ? UpdateChannel.Current : UpdateChannel.Stable);
         Close();
     }
 

@@ -43,4 +43,13 @@ public sealed partial class MainWindow : Window
         settingsWindow.Closed += (_, _) => NativeMethods.EnableWindow(mainWindowHandle, true);
         settingsWindow.Activate();
     }
+
+    // Purely informational - Stable's own major ceiling always climbs to include whatever major
+    // a client is already on once a newer one ships, so nobody needs to act on this to eventually
+    // receive it; it's just letting an impatient user know it exists sooner than that.
+    public void ShowNewerMajorVersionNotice(string newerMajorVersion)
+    {
+        NewerMajorNotice.Message = $"Version {newerMajorVersion} is out. You'll receive it automatically in a future update.";
+        NewerMajorNotice.IsOpen = true;
+    }
 }

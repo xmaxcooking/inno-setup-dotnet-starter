@@ -4,16 +4,17 @@ namespace App.Updates.Tests;
 
 internal sealed class FakeUpdateFeed : IUpdateFeed
 {
-    private readonly UpdateInfo? _result;
+    private readonly UpdateCheckResult _result;
     private readonly Exception? _failure;
 
-    public FakeUpdateFeed(UpdateInfo? result)
+    public FakeUpdateFeed(UpdateCheckResult result)
     {
         _result = result;
     }
 
     private FakeUpdateFeed(Exception failure)
     {
+        _result = UpdateCheckResult.None;
         _failure = failure;
     }
 
@@ -22,7 +23,7 @@ internal sealed class FakeUpdateFeed : IUpdateFeed
     public bool WasCalled { get; private set; }
     public string? ReceivedClientId { get; private set; }
 
-    public Task<UpdateInfo?> TryGetLatestIfNewerAsync(string currentVersion, string clientId, CancellationToken cancellationToken = default)
+    public Task<UpdateCheckResult> TryGetLatestIfNewerAsync(string currentVersion, string clientId, CancellationToken cancellationToken = default)
     {
         WasCalled = true;
         ReceivedClientId = clientId;

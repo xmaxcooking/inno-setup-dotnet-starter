@@ -24,14 +24,14 @@ public class UpdateSettingsTests
     public void GetChannel_ReturnsTheStoredChannel_WhenTheFileContainsValidJson()
     {
         var fileSystem = new FakeFileSystem();
-        fileSystem.SeedExistingFile("""{"Channel":"Beta"}""");
+        fileSystem.SeedExistingFile("""{"Channel":"Current"}""");
         var defaultUpdateChannel = new FakeDefaultUpdateChannel();
         var logger = NullLogger<UpdateSettings>.Instance;
         var settings = new UpdateSettings(fileSystem, defaultUpdateChannel, logger);
 
         var channel = settings.GetChannel();
 
-        Assert.AreEqual(UpdateChannel.Beta, channel);
+        Assert.AreEqual(UpdateChannel.Current, channel);
     }
 
     [TestMethod]
@@ -56,10 +56,10 @@ public class UpdateSettingsTests
         var logger = NullLogger<UpdateSettings>.Instance;
         var settings = new UpdateSettings(fileSystem, defaultUpdateChannel, logger);
 
-        settings.SetChannel(UpdateChannel.Beta);
+        settings.SetChannel(UpdateChannel.Current);
         var channel = settings.GetChannel();
 
-        Assert.AreEqual(UpdateChannel.Beta, channel);
+        Assert.AreEqual(UpdateChannel.Current, channel);
         Assert.IsTrue(fileSystem.CreatedDirectories.Count > 0);
     }
 
@@ -72,7 +72,7 @@ public class UpdateSettingsTests
         var logger = NullLogger<UpdateSettings>.Instance;
         var settings = new UpdateSettings(fileSystem, defaultUpdateChannel, logger);
 
-        settings.SetChannel(UpdateChannel.Beta);
+        settings.SetChannel(UpdateChannel.Current);
     }
 
     [TestMethod]
@@ -83,7 +83,7 @@ public class UpdateSettingsTests
         var logger = NullLogger<UpdateSettings>.Instance;
         var settings = new UpdateSettings(fileSystem, defaultUpdateChannel, logger);
 
-        settings.SetChannel(UpdateChannel.Beta);
+        settings.SetChannel(UpdateChannel.Current);
 
         Assert.AreEqual(1, fileSystem.DeletedFilePaths.Count);
     }
@@ -92,13 +92,13 @@ public class UpdateSettingsTests
     public void GetChannel_ReturnsTheDefaultChannel_WhenNoSettingsFileExists()
     {
         var fileSystem = new FakeFileSystem();
-        var defaultUpdateChannel = new FakeDefaultUpdateChannel { Value = UpdateChannel.Beta };
+        var defaultUpdateChannel = new FakeDefaultUpdateChannel { Value = UpdateChannel.Current };
         var logger = NullLogger<UpdateSettings>.Instance;
         var settings = new UpdateSettings(fileSystem, defaultUpdateChannel, logger);
 
         var channel = settings.GetChannel();
 
-        Assert.AreEqual(UpdateChannel.Beta, channel);
+        Assert.AreEqual(UpdateChannel.Current, channel);
     }
 
     [TestMethod]
@@ -106,12 +106,12 @@ public class UpdateSettingsTests
     {
         var fileSystem = new FakeFileSystem();
         fileSystem.SeedExistingFile("not valid json");
-        var defaultUpdateChannel = new FakeDefaultUpdateChannel { Value = UpdateChannel.Beta };
+        var defaultUpdateChannel = new FakeDefaultUpdateChannel { Value = UpdateChannel.Current };
         var logger = NullLogger<UpdateSettings>.Instance;
         var settings = new UpdateSettings(fileSystem, defaultUpdateChannel, logger);
 
         var channel = settings.GetChannel();
 
-        Assert.AreEqual(UpdateChannel.Beta, channel);
+        Assert.AreEqual(UpdateChannel.Current, channel);
     }
 }
