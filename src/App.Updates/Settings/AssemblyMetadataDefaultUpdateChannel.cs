@@ -3,7 +3,7 @@ using System.Reflection;
 
 namespace App.Updates.Settings;
 
-public sealed class AssemblyMetadataDefaultUpdateChannel : IDefaultUpdateChannel
+internal sealed class AssemblyMetadataDefaultUpdateChannel : IDefaultUpdateChannel
 {
     private const string IsPrereleaseBuildMetadataKey = "IsPrereleaseBuild";
 

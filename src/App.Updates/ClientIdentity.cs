@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 
 namespace App.Updates;
 
-public sealed class ClientIdentity : IClientIdentity
+internal sealed class ClientIdentity : IClientIdentity
 {
     private readonly IFileSystem _fs;
     private readonly ILogger<ClientIdentity> _logger;

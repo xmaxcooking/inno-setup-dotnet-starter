@@ -1,5 +1,5 @@
+using App.Core.Api;
 using App.Updates.Feed;
-using App.Updates.Settings;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -10,9 +10,9 @@ namespace App.Client.Windows.Settings;
 
 public sealed partial class SettingsWindow : Window
 {
-    private readonly IUpdateSettingsStore _updateSettings;
+    private readonly IUpdateChannelSettings _updateSettings;
 
-    public SettingsWindow(IUpdateSettingsStore updateSettings)
+    public SettingsWindow(IUpdateChannelSettings updateSettings)
     {
         _updateSettings = updateSettings;
         InitializeComponent();

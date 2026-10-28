@@ -22,9 +22,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\App.Domain\App.Domain.csproj" />
-    <ProjectReference Include="..\App.Infrastructure\App.Infrastructure.csproj" />
-    <ProjectReference Include="..\App.Updates\App.Updates.csproj" />
+    <ProjectReference Include="..\App.Core.Api\App.Core.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>

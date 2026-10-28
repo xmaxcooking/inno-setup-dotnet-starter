@@ -1,6 +1,6 @@
 namespace App.Abstractions.Time;
 
-public sealed class SystemDateTime : ISystemDateTime
+internal sealed class SystemDateTime : ISystemDateTime
 {
     public DateTimeOffset UtcNow => DateTimeOffset.UtcNow;
 }

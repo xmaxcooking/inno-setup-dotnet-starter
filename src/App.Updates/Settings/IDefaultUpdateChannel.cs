@@ -2,7 +2,7 @@ using App.Updates.Feed;
 
 namespace App.Updates.Settings;
 
-public interface IDefaultUpdateChannel
+internal interface IDefaultUpdateChannel
 {
     UpdateChannel Value { get; }
 }

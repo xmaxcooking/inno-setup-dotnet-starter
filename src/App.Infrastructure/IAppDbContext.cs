@@ -2,7 +2,7 @@ using App.Domain;
 
 namespace App.Infrastructure;
 
-public interface IAppDbContext
+internal interface IAppDbContext
 {
     IQueryable<Customer> Customers { get; }
 }

@@ -2,9 +2,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace App.Infrastructure;
 
-public static class ServiceCollectionExtensions
+internal static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services)
+    internal static IServiceCollection AddInfrastructure(this IServiceCollection services)
     {
         services.AddSingleton<IAppDbContext, FakeDbContext>();
         return services;

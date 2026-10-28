@@ -26,6 +26,7 @@
     <Project Path="src/App.Client.Windows/App.Client.Windows.csproj">
       <Platform Solution="*|*" Project="x64" />
     </Project>
+    <Project Path="src/App.Core.Api/App.Core.Api.csproj" />
     <Project Path="src/App.Domain/App.Domain.csproj" />
     <Project Path="src/App.Infrastructure/App.Infrastructure.csproj" />
     <Project Path="src/App.Updates/App.Updates.csproj" />

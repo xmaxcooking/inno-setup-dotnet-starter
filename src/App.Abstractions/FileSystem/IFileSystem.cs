@@ -1,6 +1,6 @@
 namespace App.Abstractions.FileSystem;
 
-public interface IFileSystem
+internal interface IFileSystem
 {
     bool FileExists(string path);
     string ReadAllText(string path);

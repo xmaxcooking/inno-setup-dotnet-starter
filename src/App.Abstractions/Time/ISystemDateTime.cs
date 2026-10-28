@@ -1,6 +1,6 @@
 namespace App.Abstractions.Time;
 
-public interface ISystemDateTime
+internal interface ISystemDateTime
 {
     DateTimeOffset UtcNow { get; }
 }

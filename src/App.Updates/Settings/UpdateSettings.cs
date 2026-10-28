@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 
 namespace App.Updates.Settings;
 
-public sealed class UpdateSettings : IUpdateSettingsStore
+internal sealed class UpdateSettings : IUpdateSettingsStore
 {
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {

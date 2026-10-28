@@ -1,6 +1,6 @@
 namespace App.Updates;
 
-public interface IClientIdentity
+internal interface IClientIdentity
 {
     string GetOrCreate();
 }

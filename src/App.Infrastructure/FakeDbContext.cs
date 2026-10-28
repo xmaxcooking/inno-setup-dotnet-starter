@@ -2,7 +2,7 @@ using App.Domain;
 
 namespace App.Infrastructure;
 
-public sealed class FakeDbContext : IAppDbContext
+internal sealed class FakeDbContext : IAppDbContext
 {
     public IQueryable<Customer> Customers { get; } = new List<Customer>
     {

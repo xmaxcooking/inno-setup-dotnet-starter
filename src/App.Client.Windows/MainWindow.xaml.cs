@@ -1,5 +1,5 @@
 using App.Client.Windows.Settings;
-using App.Infrastructure;
+using App.Core.Api;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -12,7 +12,7 @@ public sealed partial class MainWindow : Window
 {
     private readonly Func<SettingsWindow> _settingsWindowFactory;
 
-    public MainWindow(Func<SettingsWindow> settingsWindowFactory, IAppDbContext dbContext)
+    public MainWindow(Func<SettingsWindow> settingsWindowFactory, ICustomerDirectory customerDirectory)
     {
         _settingsWindowFactory = settingsWindowFactory;
         InitializeComponent();
@@ -27,7 +27,7 @@ public sealed partial class MainWindow : Window
             presenter.PreferredMinimumHeight = 480;
         }
 
-        var customers = dbContext.Customers.ToList();
+        var customers = customerDirectory.GetAll();
         CustomersList.ItemsSource = customers;
         CustomerCountText.Text = $"{customers.Count} customers";
     }

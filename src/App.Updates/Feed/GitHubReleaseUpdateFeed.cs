@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace App.Updates.Feed;
 
-public sealed class GitHubReleaseUpdateFeed : IUpdateFeed
+internal sealed class GitHubReleaseUpdateFeed : IUpdateFeed
 {
     private readonly HttpClient _httpClient;
     private readonly string _owner;

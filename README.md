@@ -13,9 +13,15 @@ Directory.Packages.props  central package management - every PackageReference's 
 assets/            icon/logo/license assets used by the installer
 src/
   App.Domain/      class library - the "Customer" domain model
+  App.Abstractions/ class library - cross-cutting interfaces (IFileSystem, IProcessLauncher,
+                    ISystemDateTime) - internal, implementation detail behind App.Core.Api
   App.Infrastructure/ class library - data access abstraction (IAppDbContext) + concrete data
-                    access (FakeDbContext, in-memory sample data)
-  App.Updates/      class library - update-check feed, settings, and client identity
+                    access (FakeDbContext, in-memory sample data) - internal, same reason
+  App.Updates/      class library - update-check feed, settings, and client identity - internal
+                    except for the plain data types (UpdateInfo, UpdateChannel, SemanticVersion)
+  App.Core.Api/     class library - the app's real public surface. App.Client.Windows and
+                    App.Installer.Tool are only allowed to reference this, not the three projects
+                    above directly - see "App.Core.Api: the app's real public surface" below
   App.Client.Windows/  WinUI 3 app (net10.0-windows10.0.19041.0) - entry point, shows the sample
                     data in a ListView, Settings window for the update channel
 tests/
@@ -26,12 +32,40 @@ installer/
                     by ISCC.exe (see "Build the installer only" below)
   App.Installer.Tool/  .NET 10 console app, bundled into the installer and run via
                     ExecAndCaptureOutput() to populate two custom wizard pages (a country dropdown,
-                    then a dependent customer list) straight from App.Infrastructure's real sample
+                    then a dependent customer list) straight from App.Core.Api's real sample
                     data - not from data hardcoded in the script. None of MSI's net48/mscoree
                     constraint on install-time code either (see "Adapting this template" below)
 build/
   App.Build.csproj Fallout (NUKE successor) build pipeline - see "Full pipeline" below
 ```
+
+## `App.Core.Api`: the app's real public surface
+
+`App.Domain`, `App.Infrastructure`, `App.Abstractions`, and all but three types in `App.Updates`
+are `internal` - not just "not referenced," but genuinely inaccessible outside their own assembly.
+`App.Core.Api` is the one project granted friend access (`[assembly: InternalsVisibleTo(...)]` in
+each project's `AssemblyInfo.cs`) and the one project `App.Client.Windows` and
+`App.Installer.Tool` are allowed to reference - both only ever call `services.AddCoreApi()` and
+resolve `ICustomerDirectory`/`IUpdateService`/`IUpdateChannelSettings` from DI, never anything from
+the three internal projects directly.
+
+This isn't automated or enforced by a build check - omitting a `<ProjectReference>` alone wouldn't
+actually stop a consumer from reaching the internal projects' types, since .NET project references
+are transitively visible for compilation by default. `internal` + `InternalsVisibleTo` is what
+makes the boundary real, not just a convention. The payoff: a diff that only touches
+`App.Infrastructure`/`App.Updates`/`App.Abstractions` is, by construction, invisible to both real
+consumers - internal-only, never breaking for them. A diff that touches `App.Core.Api`'s own
+public interfaces is the one case actually worth asking "does this need a `VersionMajor` bump,"
+since that's the one surface anything outside this solution could ever depend on.
+
+If you extend this template with a second, independent consumer of `App.Core.Api` (e.g. a
+published NuGet package, or a UI that isn't rebuilt from the same solution every time), consider
+adding an automated API-compatibility check (e.g. `Microsoft.DotNet.ApiCompat`) on top of this
+boundary - that's the point where a forgotten `VersionMajor` bump stops being something a reviewer
+would always catch by eye and starts being something a published consumer could actually get
+silently broken by. For two consumers that are always rebuilt together in the same solution (the
+case today), the C# compiler already catches that for you on every build, so it wouldn't add real
+protection yet.
 
 ## Prerequisites
 
@@ -228,6 +262,8 @@ which can't represent those characters.
 - `App.Domain` is the seam for real domain models; `App.Infrastructure` holds both the data
   access abstraction (`IAppDbContext`) and its real implementation (e.g. a real EF Core
   `DbContext` in place of `FakeDbContext`) - `IAppDbContext` mirrors EF Core's own `DbContext`
-  shape, so it's a persistence concern, not a domain one.
+  shape, so it's a persistence concern, not a domain one. Both are `internal`, reached only
+  through `App.Core.Api`'s `ICustomerDirectory` - swapping `FakeDbContext` for a real one needs no
+  change to `App.Core.Api` or either consumer, since `IAppDbContext` itself doesn't change shape.
 - `assets/logo.bmp` must stay a `.bmp` - Inno Setup's wizard image attributes don't accept PNG.
   `assets/License.txt` is plain text (Inno doesn't require RTF, unlike WiX's WixUI).

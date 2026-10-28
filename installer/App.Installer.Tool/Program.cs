@@ -1,5 +1,11 @@
-using App.Infrastructure;
+using App.Core.Api;
+using Microsoft.Extensions.DependencyInjection;
 using System.CommandLine;
+
+var services = new ServiceCollection();
+services.AddCoreApi();
+using var provider = services.BuildServiceProvider();
+var customerDirectory = provider.GetRequiredService<ICustomerDirectory>();
 
 var countryArgument = new Argument<string>("country")
 {
@@ -20,8 +26,7 @@ var rootCommand = new RootCommand("Install-time data provider for Setup.iss's cu
 
 listCountriesCommand.SetAction(_ =>
 {
-    var dbContext = new FakeDbContext();
-    foreach (var country in dbContext.Customers.Select(c => c.Country).Distinct().OrderBy(c => c))
+    foreach (var country in customerDirectory.GetAll().Select(c => c.Country).Distinct().OrderBy(c => c))
     {
         Console.WriteLine(country);
     }
@@ -32,8 +37,7 @@ listCountriesCommand.SetAction(_ =>
 listCustomersCommand.SetAction(parseResult =>
 {
     var country = parseResult.GetValue(countryArgument);
-    var dbContext = new FakeDbContext();
-    foreach (var customer in dbContext.Customers.Where(c => c.Country == country).OrderBy(c => c.Name))
+    foreach (var customer in customerDirectory.GetAll().Where(c => c.Country == country).OrderBy(c => c.Name))
     {
         Console.WriteLine(customer.Name);
     }

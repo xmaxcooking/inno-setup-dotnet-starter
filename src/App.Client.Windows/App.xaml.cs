@@ -1,6 +1,5 @@
 using App.Client.Windows.Settings;
-using App.Infrastructure;
-using App.Updates;
+using App.Core.Api;
 using App.Updates.Feed;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -47,8 +46,8 @@ public partial class App : Application
 
     private async Task checkForUpdatesAsync(ServiceProvider provider)
     {
-        var updateCheck = provider.GetRequiredService<UpdateCheck>();
-        var update = await updateCheck.CheckAsync();
+        var updateService = provider.GetRequiredService<IUpdateService>();
+        var update = await updateService.CheckForUpdateAsync();
         if (update is null)
         {
             return;
@@ -62,7 +61,7 @@ public partial class App : Application
 
         try
         {
-            await downloadWithProgressAsync(updateCheck, update);
+            await downloadWithProgressAsync(updateService, update);
 
             // A hard, immediate process exit (not the async Application.Exit()) so the mutex
             // above and any locked files are released before the installer we just launched
@@ -75,7 +74,7 @@ public partial class App : Application
         }
     }
 
-    private async Task downloadWithProgressAsync(UpdateCheck updateCheck, UpdateInfo update)
+    private async Task downloadWithProgressAsync(IUpdateService updateService, UpdateInfo update)
     {
         var statusText = new TextBlock { Text = "Starting download…" };
         var progressBar = new ProgressBar { IsIndeterminate = true, Width = 280 };
@@ -100,7 +99,7 @@ public partial class App : Application
         _ = dialog.ShowAsync();
         try
         {
-            await updateCheck.DownloadAndLaunchAsync(update, progress);
+            await updateService.DownloadAndLaunchUpdateAsync(update, progress);
         }
         finally
         {
@@ -126,10 +125,8 @@ public partial class App : Application
     private static void configureServices(IServiceCollection services)
     {
         services.AddLogging(builder => builder.AddDebug());
-        services.AddHttpClient();
 
-        services.AddInfrastructure();
-        services.AddUpdates();
+        services.AddCoreApi();
 
         services.AddTransient<SettingsWindow>();
         services.AddSingleton<Func<SettingsWindow>>(sp => sp.GetRequiredService<SettingsWindow>);
