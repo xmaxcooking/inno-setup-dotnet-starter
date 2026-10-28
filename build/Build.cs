@@ -14,7 +14,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using static Fallout.Common.EnvironmentInfo;
 using static Fallout.Common.Tools.DotNet.DotNetTasks;
 
@@ -72,43 +71,49 @@ internal class Build : FalloutBuild
     private AbsolutePath toolPublishDirectory => RootDirectory / "artifacts" / "publish" / "App.Installer.Tool";
     private AbsolutePath setupScript => RootDirectory / "installer" / "Setup.iss";
 
-    // None < Patch < Minor < Major - deliberately ordered so the strongest bump found among a set
-    // of commits can be picked with a plain `>` comparison.
-    private enum VersionBump { None, Patch, Minor, Major }
+    // Bump Major for a breaking change, Minor for a new feature - commit the change on master
+    // and the next train (or a manual dispatch) picks it up. A hotfix branch keeps whatever was
+    // committed here at the tag it was cut from, so it keeps extending that older line's patch
+    // sequence independently of whatever master has moved on to.
+    private const int VersionMajor = 1;
+    private const int VersionMinor = 0;
 
-    private (string Tag, VersionBump Bump)? _nextRelease;
+    private Lazy<string> _releaseTagLazy;
 
-    private (string Tag, VersionBump Bump) nextRelease
+    private string releaseTag
     {
         get
         {
-            _nextRelease ??= computeNextRelease();
-            return _nextRelease.Value;
+            _releaseTagLazy ??= new Lazy<string>(computeReleaseTag);
+            return _releaseTagLazy.Value;
         }
     }
 
-    private string releaseTag => nextRelease.Tag;
-
-    // A release is only worth publishing when there's something release-worthy since the last
-    // one (nextRelease.Bump != None - a day/branch with only chore/docs commits, or none at all,
-    // produces no release at all, same as real semantic-release) and, for a plain push, only when
-    // it's a hotfix branch - a plain push to master always waits for the next train or a manual
-    // dispatch instead, so pushing to master repeatedly doesn't spam users with update prompts.
+    // A plain push to master always waits for the next train or a manual dispatch instead of
+    // releasing immediately, so pushing to master repeatedly doesn't spam users with update
+    // prompts; a hotfix branch releases right away. The weekday train additionally skips if
+    // master's HEAD was already released (e.g. no commits landed since the last run), so it
+    // doesn't cut a no-op release re-tagging identical bits under a new patch number.
     private bool shouldPublishRelease
     {
         get
         {
-            if (nextRelease.Bump == VersionBump.None)
-            {
-                return false;
-            }
-
             if (GitHubActions.Instance is not { } gitHubActions)
             {
                 return true;
             }
 
-            return gitHubActions.EventName != "push" || gitHubActions.RefName != "master";
+            if (gitHubActions.EventName == "push" && gitHubActions.RefName == "master")
+            {
+                return false;
+            }
+
+            if (gitHubActions.EventName == "schedule" && existingReleases().Any(r => r.TargetCommitish == gitHubActions.Sha))
+            {
+                return false;
+            }
+
+            return true;
         }
     }
 
@@ -141,172 +146,24 @@ internal class Build : FalloutBuild
         return _existingReleases;
     }
 
-    // The base to bump from is the highest-versioned existing release that's actually an ancestor
-    // of HEAD - not just the globally highest release - so a hotfix branch cut from an old v1.0.x
-    // tag bumps from v1.0.x, even while master has already moved on to a newer v1.1.0/v2.0.0.
-    private (int Major, int Minor, int Patch, string Sha) findLastRelease()
-    {
-        Version highestVersion = null;
-        string highestSha = null;
-
-        foreach (var release in existingReleases())
-        {
-            if (SemanticVersion.Parse(release.TagName) is not { } version
-                || release.TargetCommitish is not { } sha
-                || (highestVersion is not null && version <= highestVersion)
-                || !isAncestorOfHead(sha))
-            {
-                continue;
-            }
-
-            highestVersion = version;
-            highestSha = sha;
-        }
-
-        return highestVersion is null
-            ? (0, 0, 0, null)
-            : (highestVersion.Major, highestVersion.Minor, highestVersion.Build, highestSha);
-    }
-
-    private static bool isAncestorOfHead(string sha)
-    {
-        var startInfo = new ProcessStartInfo("git", $"merge-base --is-ancestor {sha} HEAD")
-        {
-            UseShellExecute = false,
-            WorkingDirectory = RootDirectory
-        };
-
-        using var process = Process.Start(startInfo);
-        process.WaitForExit();
-        return process.ExitCode == 0;
-    }
-
-    // Conventional Commits (https://www.conventionalcommits.org/), the same convention
-    // semantic-release/GitVersion read: "feat:" -> Minor, "fix:" -> Patch, a "!" after the
-    // type/scope or a "BREAKING CHANGE:" footer -> Major. Anything else (chore/docs/refactor/an
-    // unconventional message) contributes no bump at all.
-    private static VersionBump classifyCommitMessage(string message)
-    {
-        var subjectLine = message.Split('\n')[0];
-
-        // A footer is its own paragraph (separated from the body by a blank line), per the spec -
-        // not just the phrase appearing anywhere, which would false-positive on a commit message
-        // that happens to mention "BREAKING CHANGE:" in passing (as this very check's own commit
-        // message once did, describing this exact rule).
-        var hasBreakingChangeFooter = message
-            .Split("\n\n", StringSplitOptions.RemoveEmptyEntries)
-            .Skip(1)
-            .Any(paragraph => paragraph.StartsWith("BREAKING CHANGE:", StringComparison.Ordinal)
-                || paragraph.StartsWith("BREAKING-CHANGE:", StringComparison.Ordinal));
-
-        if (hasBreakingChangeFooter || Regex.IsMatch(subjectLine, @"^\w+(\([^)]*\))?!:"))
-        {
-            return VersionBump.Major;
-        }
-
-        if (Regex.IsMatch(subjectLine, @"^feat(\([^)]*\))?:", RegexOptions.IgnoreCase))
-        {
-            return VersionBump.Minor;
-        }
-
-        if (Regex.IsMatch(subjectLine, @"^fix(\([^)]*\))?:", RegexOptions.IgnoreCase))
-        {
-            return VersionBump.Patch;
-        }
-
-        return VersionBump.None;
-    }
-
-    private static IReadOnlyList<string> commitMessagesSince(string sha)
-    {
-        var range = sha is null ? "HEAD" : $"{sha}..HEAD";
-
-        var startInfo = new ProcessStartInfo("git", $"log {range} --pretty=format:%B%x00")
-        {
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            WorkingDirectory = RootDirectory
-        };
-
-        using var process = Process.Start(startInfo);
-        var output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
-
-        return output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
-    }
-
-    // Every commit must follow Conventional Commits (feat:/fix:/chore:/etc.) - not just the
-    // feat:/fix:/breaking-change ones that actually affect the version, since an unconventional
-    // message among those would silently contribute no bump at all (see classifyCommitMessage)
-    // rather than being caught as the mistake it almost certainly is.
-    private static readonly string[] _conventionalCommitTypes =
-        ["feat", "fix", "build", "chore", "ci", "docs", "style", "refactor", "perf", "test", "revert"];
-
-    private static IReadOnlyList<string> commitMessagesToVerify()
-    {
-        if (GitHubActions.Instance is not { } gitHubActions)
-        {
-            return commitMessagesSince("HEAD~1");
-        }
-
-        if (gitHubActions.EventName != "push")
-        {
-            return [];
-        }
-
-        var beforeSha = gitHubActions.GitHubEvent["before"]?.GetValue<string>();
-        var isFirstPushToThisRef = beforeSha is null || beforeSha == new string('0', 40);
-
-        return commitMessagesSince(isFirstPushToThisRef ? "HEAD~1" : beforeSha);
-    }
-
-    private Target verifyCommitMessages => _ => _
-        .Executes(() =>
-        {
-            var typePattern = string.Join("|", _conventionalCommitTypes);
-            var subjectPattern = new Regex($@"^({typePattern})(\([^)]*\))?!?: .+");
-
-            foreach (var message in commitMessagesToVerify())
-            {
-                var subjectLine = message.Split('\n')[0];
-                if (!subjectPattern.IsMatch(subjectLine))
-                {
-                    throw new InvalidOperationException(
-                        $"Commit message doesn't follow Conventional Commits (https://www.conventionalcommits.org/) - "
-                        + $"expected \"<{typePattern}>(optional-scope)!: description\", got: \"{subjectLine}\"");
-                }
-            }
-        });
-
-    private (string Tag, VersionBump Bump) computeNextRelease()
+    private string computeReleaseTag()
     {
         if (GitHubActions.Instance is null)
         {
-            return (SemanticVersion.Format(1, 0, 0), VersionBump.Patch);
+            return SemanticVersion.Format(VersionMajor, VersionMinor, 0);
         }
 
-        var (baseMajor, baseMinor, basePatch, baseSha) = findLastRelease();
+        var prefix = $"v{VersionMajor}.{VersionMinor}.";
 
-        var bump = VersionBump.None;
-        foreach (var message in commitMessagesSince(baseSha))
-        {
-            var commitBump = classifyCommitMessage(message);
-            if (commitBump > bump)
-            {
-                bump = commitBump;
-            }
-        }
+        var nextPatch = existingReleases()
+            .Select(r => r.TagName)
+            .Where(tag => tag.StartsWith(prefix, StringComparison.Ordinal))
+            .Select(tag => int.TryParse(tag[prefix.Length..], out var patch) ? patch : -1)
+            .Where(patch => patch >= 0)
+            .DefaultIfEmpty(-1)
+            .Max() + 1;
 
-        var tag = bump switch
-        {
-            VersionBump.Major => SemanticVersion.Format(baseMajor + 1, 0, 0),
-            VersionBump.Minor => SemanticVersion.Format(baseMajor, baseMinor + 1, 0),
-            VersionBump.Patch => SemanticVersion.Format(baseMajor, baseMinor, basePatch + 1),
-            VersionBump.None => SemanticVersion.Format(baseMajor, baseMinor, basePatch),
-            _ => throw new InvalidOperationException($"Unrecognized {nameof(VersionBump)}: {bump}")
-        };
-
-        return (tag, bump);
+        return $"{prefix}{nextPatch}";
     }
 
     private Target clean => _ => _
@@ -330,7 +187,7 @@ internal class Build : FalloutBuild
             .EnableNoRestore()));
 
     private Target verifyFormat => _ => _
-        .DependsOn(restore, verifyCommitMessages)
+        .DependsOn(restore)
         .Executes(() =>
         {
             DotNetBuild(s => s.SetProjectFile(_solution).SetConfiguration(Configuration.Debug));
@@ -420,10 +277,9 @@ internal class Build : FalloutBuild
             if (!shouldPublishRelease)
             {
                 Log.Information(
-                    "Build and tests passed, but skipping the actual release ({Reason}).",
-                    nextRelease.Bump == VersionBump.None
-                        ? "nothing release-worthy (feat/fix/BREAKING CHANGE) since the last release"
-                        : "plain push to master - waiting for the next train or a manual dispatch");
+                    "Build and tests passed, but skipping the actual release - plain push to master "
+                    + "waits for the next train or a manual dispatch; the weekday train also skips if "
+                    + "master's HEAD was already released.");
                 return;
             }
 

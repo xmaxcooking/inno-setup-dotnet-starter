@@ -120,34 +120,24 @@ configure. `global.json` pins the SDK version `actions/setup-dotnet` installs.
 - **`hotfix/*` branches** release immediately on every push, no waiting for a train - branch off
   an existing release's tag (e.g. `git checkout -b hotfix/1.0 v1.0.12`), cherry-pick the fix, push.
 
-The version itself is derived, not manually tracked - there's no `VersionMajor`/`VersionMinor` to
-bump by hand. `computeNextRelease()` in `Build.cs`:
-1. Finds the highest-versioned existing release that's an actual git ancestor of `HEAD` - not just
-   the globally highest release - so a `hotfix/1.0` branch cut from `v1.0.12` bumps from `v1.0.12`,
-   even while master has already moved on to `v1.1.0`/`v2.0.0`.
-2. Reads every commit message since that release (`git log <sha>..HEAD`) and classifies each one
-   using [Conventional Commits](https://www.conventionalcommits.org/) - the same convention tools
-   like semantic-release and GitVersion read: `fix:` → Patch, `feat:` → Minor, a `!` after the
-   type/scope or a `BREAKING CHANGE:` footer → Major. Anything else (`chore:`, `docs:`, a plain
-   non-conventional message) contributes no bump.
-3. Takes the *strongest* bump found and applies it to the base version - `v1.0.12` plus a `fix:`
-   commit becomes `v1.0.13`; a `feat:` commit anywhere in the range makes it `v1.1.0` instead,
-   even if other commits in the same range were only `fix:`.
+The version is tracked manually, deliberately: `VersionMajor`/`VersionMinor` are plain constants in
+`Build.cs`, bumped by hand and committed like any other source change - a human decides when
+something is a breaking change or a new feature, and that decision shows up as a normal, reviewable
+diff. (An earlier version of this mechanism tried deriving the bump automatically from [Conventional
+Commits](https://www.conventionalcommits.org/) message prefixes - `fix:`/`feat:`/`BREAKING CHANGE:`
+- but that makes the version depend on a human remembering to self-report significance *in commit
+message text*, at the moment they're focused on the change itself rather than its compatibility
+impact. Forgetting the marker is a silent failure: nothing blocks it, it just ships mislabeled, with
+no review-time visibility into the mistake. A manual constant doesn't fully solve "a human might
+forget," but it at least turns the decision into a visible diff a reviewer can question, rather than
+a sentence buried in commit body text that gets no scrutiny at all.)
 
-**This means commit messages matter now** - a release is only ever cut when at least one commit
-since the last one uses `feat:`, `fix:`, or a breaking-change marker; a branch or day with only
-`chore:`/`docs:`/non-conventional commits produces no release at all (`shouldPublishRelease`
-returns `false`), the same as real semantic-release. Write commits accordingly.
-
-`verifyCommitMessages` (a dependency of `verifyFormat`, so every target fails fast if it fails)
-enforces this: every commit message must start with a recognized Conventional Commits type
-(`feat`, `fix`, `build`, `chore`, `ci`, `docs`, `style`, `refactor`, `perf`, `test`, `revert`),
-optionally scoped (`fix(installer): ...`) and optionally marked breaking (`feat!: ...`) - not just
-the `feat:`/`fix:` ones that actually affect the version, since an unconventional message among
-those would otherwise silently contribute no version bump at all rather than being caught as the
-mistake it almost certainly is. Locally this only checks the one commit you just made (`HEAD~1`);
-in CI, on a push, it checks every commit in that push's range (via the event's `before` SHA) - it
-doesn't run for the schedule/manual-dispatch triggers, since those aren't tied to new commits.
+PATCH still auto-increments per `Major.Minor` line: `computeReleaseTag()` scans existing release
+tags for the exact `v{VersionMajor}.{VersionMinor}.` prefix and takes the highest existing patch
+plus one. This is already hotfix-branch-correct with no extra bookkeeping - a `hotfix/1.0` branch
+cut from `v1.0.12` has `VersionMajor`/`VersionMinor` = `1`/`0` baked into its own `Build.cs` by
+construction (that's whatever was committed at the tag it was cut from), so it naturally keeps
+extending `v1.0.*`'s patch sequence independently of whatever master's constants have moved on to.
 
 Every release is a GitHub prerelease by design; there's no automated "promote to stable" step.
 To promote a build so the Stable update channel (see `src/App.Updates/`) picks it up, open that
